@@ -14,9 +14,18 @@ type Transaction struct {
 	InvoiceNumber  string            `json:"invoice_number"`
 	TotalAmount    float64           `json:"total_amount"`
 	IdempotencyKey string            `json:"idempotency_key"`
+	Status         string            `json:"status"`
 	Items          []TransactionItem `json:"items"`
 	CreatedAt      time.Time         `json:"created_at"`
 	UpdatedAt      time.Time         `json:"updated_at"`
+}
+
+type TransactionFilterRequest struct {
+	Page      int    `json:"page"`
+	Limit     int    `json:"limit"`
+	UserID    int    `json:"user_id,omitempty"`
+	StartDate string `json:"start_date,omitempty"`
+	EndDate   string `json:"end_date,omitempty"`
 }
 
 type TransactionItem struct {
@@ -42,12 +51,14 @@ type TransactionRequest struct {
 type TransactionRepository interface {
 	CheckIdempotencyKey(ctx context.Context, key string) (bool, error)
 	CreateTransaction(ctx context.Context, txReq *Transaction) error
-	GetAllTransactions(ctx context.Context, req PaginationRequest) ([]Transaction, int, error)
+	GetAllTransactions(ctx context.Context, req TransactionFilterRequest) ([]Transaction, int, error)
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
+	CancelTransaction(ctx context.Context, id int) error
 }
 
 type TransactionService interface {
 	ProcessTransaction(ctx context.Context, req TransactionRequest) (*Transaction, error)
-	GetAllTransactions(ctx context.Context, req PaginationRequest) (PaginationResponse, error)
+	GetAllTransactions(ctx context.Context, req TransactionFilterRequest) (PaginationResponse, error)
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
+	CancelTransaction(ctx context.Context, id int) error
 }

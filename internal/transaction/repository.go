@@ -91,27 +91,46 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 	return tx.Commit()
 }
 
-func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req domain.PaginationRequest) ([]domain.Transaction, int, error) {
+func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req domain.TransactionFilterRequest) ([]domain.Transaction, int, error) {
+	// Build dynamic query
+	whereQuery := "WHERE 1=1"
+	args := []interface{}{}
+
+	if req.UserID != 0 {
+		whereQuery += " AND user_id = ?"
+		args = append(args, req.UserID)
+	}
+	if req.StartDate != "" && req.EndDate != "" {
+		whereQuery += " AND DATE(created_at) BETWEEN ? AND ?"
+		args = append(args, req.StartDate, req.EndDate)
+	}
+
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(id) FROM transactions`).Scan(&total); err != nil {
+	countQuery := "SELECT COUNT(id) FROM transactions " + whereQuery
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
+
 	offset := (req.Page - 1) * req.Limit
 	if offset < 0 {
 		offset = 0
 	}
-	query := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, created_at, updated_at 
-	          FROM transactions ORDER BY id DESC LIMIT ? OFFSET ?`
 
-	rows, err := r.db.QueryContext(ctx, query, req.Limit, offset)
+	query := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
+	          FROM transactions ` + whereQuery + ` ORDER BY id DESC LIMIT ? OFFSET ?`
+
+	args = append(args, req.Limit, offset)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
+
 	var transactions []domain.Transaction
 	for rows.Next() {
 		var tx domain.Transaction
-		err := rows.Scan(&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.CreatedAt, &tx.UpdatedAt)
+		err := rows.Scan(&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -122,12 +141,12 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 
 func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
 	// 1. Ambil Data Header Transaksi
-	queryTx := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, created_at, updated_at 
+	queryTx := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
 	            FROM transactions WHERE id = ?`
 
 	var tx domain.Transaction
 	err := r.db.QueryRowContext(ctx, queryTx, id).Scan(
-		&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.CreatedAt, &tx.UpdatedAt,
+		&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -153,4 +172,63 @@ func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id 
 		tx.Items = append(tx.Items, item)
 	}
 	return &tx, nil
+}
+
+func (r *mysqlTransactionRepository) CancelTransaction(ctx context.Context, id int) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Check if transaction can be cancelled
+	var currentStatus string
+	err = tx.QueryRowContext(ctx, "SELECT status FROM transactions WHERE id = ? FOR UPDATE", id).Scan(&currentStatus)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return domain.ErrTransactionNotFound
+		}
+		return err
+	}
+
+	if currentStatus == "CANCELLED" {
+		return errors.New("transaction is already cancelled")
+	}
+
+	// 2. Fetch items to return stock
+	rows, err := tx.QueryContext(ctx, "SELECT product_id, quantity FROM transaction_items WHERE transaction_id = ?", id)
+	if err != nil {
+		return err
+	}
+	
+	type item struct {
+		productID int
+		quantity  int
+	}
+	var itemsToReturn []item
+	for rows.Next() {
+		var i item
+		if err := rows.Scan(&i.productID, &i.quantity); err != nil {
+			rows.Close()
+			return err
+		}
+		itemsToReturn = append(itemsToReturn, i)
+	}
+	rows.Close()
+
+	// 3. Return stock to products
+	for _, i := range itemsToReturn {
+		_, err := tx.ExecContext(ctx, "UPDATE products SET stock = stock + ? WHERE id = ?", i.quantity, i.productID)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 4. Update status to CANCELLED
+	_, err = tx.ExecContext(ctx, "UPDATE transactions SET status = 'CANCELLED' WHERE id = ?", id)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

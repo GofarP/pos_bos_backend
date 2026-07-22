@@ -26,7 +26,7 @@ func (h *TransactionHandler) RegisterRoutes(router chi.Router) {
 	router.Post("/transactions", h.Checkout)
 	router.Get("/transactions", h.GetAllTransactions)
 	router.Get("/transactions/{id}", h.GetTransactionByID)
-
+	router.Post("/transactions/{id}/cancel", h.CancelTransaction)
 }
 
 func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
@@ -86,9 +86,24 @@ func (h *TransactionHandler) GetAllTransactions(w http.ResponseWriter, r *http.R
 		limit = l
 	}
 
-	req := domain.PaginationRequest{
-		Page:  page,
-		Limit: limit,
+	userIDStr := r.URL.Query().Get("user_id")
+	startDate := r.URL.Query().Get("start_date")
+	endDate := r.URL.Query().Get("end_date")
+
+	userID := 0
+	if userIDStr != "" {
+		u, err := strconv.Atoi(userIDStr)
+		if err == nil {
+			userID = u
+		}
+	}
+
+	req := domain.TransactionFilterRequest{
+		Page:      page,
+		Limit:     limit,
+		UserID:    userID,
+		StartDate: startDate,
+		EndDate:   endDate,
 	}
 
 	res, err := h.service.GetAllTransactions(r.Context(), req)
@@ -117,4 +132,30 @@ func (h *TransactionHandler) GetTransactionByID(w http.ResponseWriter, r *http.R
 	}
 
 	response.JSON(w, http.StatusOK, res)
+}
+
+func (h *TransactionHandler) CancelTransaction(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid transaction ID")
+		return
+	}
+
+	err = h.service.CancelTransaction(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrTransactionNotFound) {
+			response.Error(w, http.StatusNotFound, "Transaction not found")
+			return
+		}
+		if err.Error() == "transaction is already cancelled" {
+			response.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "Failed to cancel transaction")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "Transaction cancelled successfully and stock refunded",
+	})
 }

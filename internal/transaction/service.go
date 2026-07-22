@@ -51,6 +51,7 @@ func (s *transactionService) ProcessTransaction(ctx context.Context, req domain.
 		UserID:         req.UserID,
 		InvoiceNumber:  invoiceNumber,
 		IdempotencyKey: req.IdempotencyKey,
+		Status:         "COMPLETED",
 		Items:          items,
 	}
 
@@ -63,7 +64,7 @@ func (s *transactionService) ProcessTransaction(ctx context.Context, req domain.
 
 }
 
-func (s *transactionService) GetAllTransactions(ctx context.Context, req domain.PaginationRequest) (domain.PaginationResponse, error) {
+func (s *transactionService) GetAllTransactions(ctx context.Context, req domain.TransactionFilterRequest) (domain.PaginationResponse, error) {
 	if req.Page <= 0 {
 		req.Page = 1
 	}
@@ -103,4 +104,12 @@ func (s *transactionService) GetTransactionByID(ctx context.Context, id int) (*d
 	}
 
 	return tx, nil
+}
+
+func (s *transactionService) CancelTransaction(ctx context.Context, id int) error {
+	err := s.repo.CancelTransaction(ctx, id)
+	if err != nil {
+		return err
+	}
+	return nil
 }
