@@ -63,8 +63,28 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TransactionHandler) GetAllTransactions(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	page := 1
+	if pageStr != "" {
+		p, err := strconv.Atoi(pageStr)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid page parameter")
+			return
+		}
+		page = p
+	}
+
+	limit := 10
+	if limitStr != "" {
+		l, err := strconv.Atoi(limitStr)
+		if err != nil {
+			response.Error(w, http.StatusBadRequest, "Invalid limit parameter")
+			return
+		}
+		limit = l
+	}
 
 	req := domain.PaginationRequest{
 		Page:  page,
@@ -88,7 +108,7 @@ func (h *TransactionHandler) GetTransactionByID(w http.ResponseWriter, r *http.R
 	}
 	res, err := h.service.GetTransactionByID(r.Context(), id)
 	if err != nil {
-		if err.Error() == "transaction not found" {
+		if errors.Is(err, domain.ErrTransactionNotFound) {
 			response.Error(w, http.StatusNotFound, err.Error())
 			return
 		}

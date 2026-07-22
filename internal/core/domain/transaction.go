@@ -2,8 +2,11 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+var ErrTransactionNotFound = errors.New("transaction not found")
 
 type Transaction struct {
 	ID             int               `json:"id"`

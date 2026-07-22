@@ -99,7 +99,7 @@ func (s *transactionService) GetTransactionByID(ctx context.Context, id int) (*d
 	}
 
 	if tx == nil {
-		return nil, errors.New("Transaction not found")
+		return nil, domain.ErrTransactionNotFound
 	}
 
 	return tx, nil
