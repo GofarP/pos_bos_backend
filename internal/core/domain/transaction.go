@@ -39,8 +39,12 @@ type TransactionRequest struct {
 type TransactionRepository interface {
 	CheckIdempotencyKey(ctx context.Context, key string) (bool, error)
 	CreateTransaction(ctx context.Context, txReq *Transaction) error
+	GetAllTransactions(ctx context.Context, req PaginationRequest) ([]Transaction, int, error)
+	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 }
 
 type TransactionService interface {
 	ProcessTransaction(ctx context.Context, req TransactionRequest) (*Transaction, error)
+	GetAllTransactions(ctx context.Context, req PaginationRequest) (PaginationResponse, error)
+	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 }

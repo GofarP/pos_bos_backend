@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"pos_bos/internal/core/domain"
 	"pos_bos/pkg/middleware"
@@ -23,6 +24,9 @@ func NewTransactionHandler(service domain.TransactionService) *TransactionHandle
 
 func (h *TransactionHandler) RegisterRoutes(router chi.Router) {
 	router.Post("/transactions", h.Checkout)
+	router.Get("/transactions", h.GetAllTransactions)
+	router.Get("/transactions/{id}", h.GetTransactionByID)
+
 }
 
 func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
@@ -56,4 +60,41 @@ func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusCreated, res)
+}
+
+func (h *TransactionHandler) GetAllTransactions(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+
+	req := domain.PaginationRequest{
+		Page:  page,
+		Limit: limit,
+	}
+
+	res, err := h.service.GetAllTransactions(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, res)
+}
+
+func (h *TransactionHandler) GetTransactionByID(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+	res, err := h.service.GetTransactionByID(r.Context(), id)
+	if err != nil {
+		if err.Error() == "transaction not found" {
+			response.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, res)
 }

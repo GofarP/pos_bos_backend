@@ -90,3 +90,67 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 
 	return tx.Commit()
 }
+
+func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req domain.PaginationRequest) ([]domain.Transaction, int, error) {
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(id) FROM transactions`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	offset := (req.Page - 1) * req.Limit
+	if offset < 0 {
+		offset = 0
+	}
+	query := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, created_at, updated_at 
+	          FROM transactions ORDER BY id DESC LIMIT ? OFFSET ?`
+
+	rows, err := r.db.QueryContext(ctx, query, req.Limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var transactions []domain.Transaction
+	for rows.Next() {
+		var tx domain.Transaction
+		err := rows.Scan(&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.CreatedAt, &tx.UpdatedAt)
+		if err != nil {
+			return nil, 0, err
+		}
+		transactions = append(transactions, tx)
+	}
+	return transactions, total, nil
+}
+
+func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
+	// 1. Ambil Data Header Transaksi
+	queryTx := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, created_at, updated_at 
+	            FROM transactions WHERE id = ?`
+
+	var tx domain.Transaction
+	err := r.db.QueryRowContext(ctx, queryTx, id).Scan(
+		&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.CreatedAt, &tx.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Return nil jika tidak ditemukan
+		}
+		return nil, err
+	}
+	// 2. Ambil Data Detail Item-nya
+	queryItems := `SELECT id, transaction_id, product_id, quantity, price, subtotal 
+	               FROM transaction_items WHERE transaction_id = ?`
+
+	rows, err := r.db.QueryContext(ctx, queryItems, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item domain.TransactionItem
+		err := rows.Scan(&item.ID, &item.TransactionID, &item.ProductID, &item.Quantity, &item.Price, &item.Subtotal)
+		if err != nil {
+			return nil, err
+		}
+		tx.Items = append(tx.Items, item)
+	}
+	return &tx, nil
+}

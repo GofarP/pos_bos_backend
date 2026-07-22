@@ -62,3 +62,45 @@ func (s *transactionService) ProcessTransaction(ctx context.Context, req domain.
 	return txData, nil
 
 }
+
+func (s *transactionService) GetAllTransactions(ctx context.Context, req domain.PaginationRequest) (domain.PaginationResponse, error) {
+	if req.Page <= 0 {
+		req.Page = 1
+	}
+
+	if req.Limit <= 0 {
+		req.Limit = 10
+	}
+
+	transactions, total, err := s.repo.GetAllTransactions(ctx, req)
+	if err != nil {
+		return domain.PaginationResponse{}, err
+	}
+	totalPages := total / req.Limit
+	if total%req.Limit > 0 {
+		totalPages++
+	}
+
+	return domain.PaginationResponse{
+		Data: transactions,
+		Meta: domain.PaginationMeta{
+			Page:         req.Page,
+			Limit:        req.Limit,
+			TotalRecords: total,
+			TotalPages:   totalPages,
+		},
+	}, nil
+}
+
+func (s *transactionService) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
+	tx, err := s.repo.GetTransactionByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if tx == nil {
+		return nil, errors.New("Transaction not found")
+	}
+
+	return tx, nil
+}
