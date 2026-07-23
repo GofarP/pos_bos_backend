@@ -43,11 +43,11 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 
 	txReq.ID = int(txID)
 
-	var totalAmount float64
+	var totalAmount int64
 
 	for i, item := range txReq.Items {
 		var currentStock int
-		var price float64
+		var price int64
 		err := tx.QueryRowContext(ctx, "SELECT stock, price FROM products WHERE id = ? FOR UPDATE", item.ProductID).Scan(&currentStock, &price)
 		if err != nil {
 			return errors.New(("Product not found or failed to lock"))
@@ -57,7 +57,7 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 			return errors.New("insufficient stock for product ID")
 		}
 
-		subtotal := price * float64(item.Quantity)
+		subtotal := price * int64(item.Quantity)
 		txReq.Items[i].Price = price
 		txReq.Items[i].Subtotal = subtotal
 		totalAmount += subtotal

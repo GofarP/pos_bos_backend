@@ -12,7 +12,7 @@ type Transaction struct {
 	ID             int               `json:"id"`
 	UserID         int               `json:"user_id"`
 	InvoiceNumber  string            `json:"invoice_number"`
-	TotalAmount    float64           `json:"total_amount"`
+	TotalAmount    int64             `json:"total_amount"`
 	IdempotencyKey string            `json:"idempotency_key"`
 	Status         string            `json:"status"`
 	Items          []TransactionItem `json:"items"`
@@ -33,8 +33,8 @@ type TransactionItem struct {
 	TransactionID int     `json:"transaction_id"`
 	ProductID     int     `json:"product_id"`
 	Quantity      int     `json:"quantity"`
-	Price         float64 `json:"price"`
-	Subtotal      float64 `json:"subtotal"`
+	Price         int64   `json:"price"`
+	Subtotal      int64   `json:"subtotal"`
 }
 
 type TransactionItemRequest struct {

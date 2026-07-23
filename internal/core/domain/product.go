@@ -12,7 +12,7 @@ type Product struct {
 	SKU         *string   `json:"sku"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description"`
-	Price       float64   `json:"price"`
+	Price       int64   `json:"price"`
 	Stock       int       `json:"stock"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -23,7 +23,7 @@ type ProductRequest struct {
 	SKU         *string `json:"sku" validate:"omitempty,max=100"`
 	Name        string  `json:"name" validate:"required,max=255"`
 	Description *string `json:"description"`
-	Price       float64 `json:"price" validate:"required,min=0"`
+	Price       int64 `json:"price" validate:"required,min=0"`
 	Stock       int     `json:"stock" validate:"min=0"`
 }
 
