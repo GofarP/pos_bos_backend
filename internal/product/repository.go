@@ -17,13 +17,25 @@ func NewProductRepository(db *sql.DB) domain.ProductRepository {
 func (r *mysqlProductRepository) CheckSKUExists(ctx context.Context, sku string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM products WHERE sku = ?)`
-	err := r.db.QueryRowContext(ctx, query, sku).Scan(&exists)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, sku).Scan(&exists)
 	return exists, err
 }
 
 func (r *mysqlProductRepository) Create(ctx context.Context, req domain.ProductRequest) (*domain.Product, error) {
 	query := `INSERT INTO products (category_id, sku, name, description, price, stock) VALUES (?, ?, ?, ?, ?, ?)`
-	res, err := r.db.ExecContext(ctx, query, req.CategoryID, req.SKU, req.Name, req.Description, req.Price, req.Stock)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	res, err := stmt.ExecContext(ctx, req.CategoryID, req.SKU, req.Name, req.Description, req.Price, req.Stock)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +48,23 @@ func (r *mysqlProductRepository) Create(ctx context.Context, req domain.ProductR
 }
 
 func (r *mysqlProductRepository) GetAll(ctx context.Context, req domain.PaginationRequest) ([]domain.Product, int, error) {
+	countQuery := `SELECT COUNT(id) FROM products WHERE 1=1`
+	var args []interface{}
+
+	if req.Search != "" {
+		searchPattern := "%" + req.Search + "%"
+		countQuery += ` AND (name LIKE ? OR sku LIKE ? OR description LIKE ?)`
+		args = append(args, searchPattern, searchPattern, searchPattern)
+	}
+
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(id) FROM products`).Scan(&total); err != nil {
+	stmtCount, err := r.db.PrepareContext(ctx, countQuery)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtCount.Close()
+
+	if err := stmtCount.QueryRowContext(ctx, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -52,9 +79,24 @@ func (r *mysqlProductRepository) GetAll(ctx context.Context, req domain.Paginati
 		       c.id, c.name, c.description, c.created_at, c.updated_at
 		FROM products p
 		LEFT JOIN categories c ON p.category_id = c.id
-		ORDER BY p.id DESC LIMIT ? OFFSET ?
+		WHERE 1=1
 	`
-	rows, err := r.db.QueryContext(ctx, query, req.Limit, offset)
+	var queryArgs []interface{}
+	if req.Search != "" {
+		searchPattern := "%" + req.Search + "%"
+		query += ` AND (p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ?)`
+		queryArgs = append(queryArgs, searchPattern, searchPattern, searchPattern)
+	}
+	query += ` ORDER BY p.id DESC LIMIT ? OFFSET ?`
+	queryArgs = append(queryArgs, req.Limit, offset)
+
+	stmtSelect, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtSelect.Close()
+
+	rows, err := stmtSelect.QueryContext(ctx, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -100,7 +142,13 @@ func (r *mysqlProductRepository) GetByID(ctx context.Context, id int) (*domain.P
 		LEFT JOIN categories c ON p.category_id = c.id
 		WHERE p.id = ?
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	row := stmt.QueryRowContext(ctx, id)
 
 	var p domain.Product
 	var c domain.Category
@@ -108,7 +156,7 @@ func (r *mysqlProductRepository) GetByID(ctx context.Context, id int) (*domain.P
 	var cName, cDesc sql.NullString
 	var cCreated, cUpdated sql.NullTime
 
-	err := row.Scan(
+	err = row.Scan(
 		&p.ID, &p.CategoryID, &p.SKU, &p.Name, &p.Description, &p.Price, &p.Stock, &p.CreatedAt, &p.UpdatedAt,
 		&cID, &cName, &cDesc, &cCreated, &cUpdated,
 	)
@@ -134,7 +182,13 @@ func (r *mysqlProductRepository) GetByID(ctx context.Context, id int) (*domain.P
 
 func (r *mysqlProductRepository) Update(ctx context.Context, id int, req domain.ProductRequest) (*domain.Product, error) {
 	query := `UPDATE products SET category_id=?, sku=?, name=?, description=?, price=?, stock=? WHERE id=?`
-	_, err := r.db.ExecContext(ctx, query, req.CategoryID, req.SKU, req.Name, req.Description, req.Price, req.Stock, id)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, req.CategoryID, req.SKU, req.Name, req.Description, req.Price, req.Stock, id)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +197,12 @@ func (r *mysqlProductRepository) Update(ctx context.Context, id int, req domain.
 
 func (r *mysqlProductRepository) Delete(ctx context.Context, id int) error {
 	query := `DELETE FROM products WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, id)
 	return err
 }

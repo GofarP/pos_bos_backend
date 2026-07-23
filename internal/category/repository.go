@@ -17,15 +17,25 @@ func NewCategoryRepository(db *sql.DB) domain.CategoryRepository {
 func (r *mysqlCategoryRepository) CheckNameExists(ctx context.Context, name string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM categories WHERE name = ?)`
-	err := r.db.QueryRowContext(ctx, query, name).Scan(&exists)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, name).Scan(&exists)
 	return exists, err
 }
 
 func (r *mysqlCategoryRepository) Create(ctx context.Context, name, description string) (*domain.Category, error) {
 	query := `INSERT INTO categories (name, description) VALUES (?, ?)`
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
 
-	res, err := r.db.ExecContext(ctx, query, name, description)
-
+	res, err := stmt.ExecContext(ctx, name, description)
 	if err != nil {
 		return nil, err
 	}
@@ -43,24 +53,51 @@ func (r *mysqlCategoryRepository) Create(ctx context.Context, name, description 
 }
 
 func (r *mysqlCategoryRepository) GetAll(ctx context.Context, req domain.PaginationRequest) ([]domain.Category, int, error) {
+	countQuery := `SELECT COUNT(id) FROM categories WHERE 1=1`
+	var args []interface{}
+
+	if req.Search != "" {
+		searchPattern := "%" + req.Search + "%"
+		countQuery += ` AND (name LIKE ? OR description LIKE ?)`
+		args = append(args, searchPattern, searchPattern)
+	}
+
 	var total int
-	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(id) FROM categories`).Scan(&total); err != nil {
+	stmtCount, err := r.db.PrepareContext(ctx, countQuery)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtCount.Close()
+
+	if err := stmtCount.QueryRowContext(ctx, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	offset := (req.Page - 1) * req.Limit
-
 	if offset < 0 {
 		offset = 0
 	}
 
-	query := `SELECT id, name, description, created_at, updated_at from categories order by id desc limit ? offset ?`
-	rows, err := r.db.QueryContext(ctx, query, req.Limit, offset)
+	query := `SELECT id, name, description, created_at, updated_at FROM categories WHERE 1=1`
+	var queryArgs []interface{}
+	if req.Search != "" {
+		searchPattern := "%" + req.Search + "%"
+		query += ` AND (name LIKE ? OR description LIKE ?)`
+		queryArgs = append(queryArgs, searchPattern, searchPattern)
+	}
+	query += ` ORDER BY id DESC LIMIT ? OFFSET ?`
+	queryArgs = append(queryArgs, req.Limit, offset)
 
+	stmtSelect, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, 0, err
 	}
+	defer stmtSelect.Close()
 
+	rows, err := stmtSelect.QueryContext(ctx, queryArgs...)
+	if err != nil {
+		return nil, 0, err
+	}
 	defer rows.Close()
 
 	categories := []domain.Category{}
@@ -72,14 +109,18 @@ func (r *mysqlCategoryRepository) GetAll(ctx context.Context, req domain.Paginat
 		categories = append(categories, cat)
 	}
 	return categories, total, nil
-
 }
 
 func (r *mysqlCategoryRepository) GetByID(ctx context.Context, id int) (*domain.Category, error) {
 	query := `SELECT id, name, description, created_at, updated_at from categories where id=?`
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
 
 	var cat domain.Category
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&cat.ID, &cat.Name, &cat.Description, &cat.CreatedAt, &cat.UpdatedAt)
+	err = stmt.QueryRowContext(ctx, id).Scan(&cat.ID, &cat.Name, &cat.Description, &cat.CreatedAt, &cat.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -91,8 +132,13 @@ func (r *mysqlCategoryRepository) GetByID(ctx context.Context, id int) (*domain.
 
 func (r *mysqlCategoryRepository) Update(ctx context.Context, id int, name, description string) (*domain.Category, error) {
 	query := `UPDATE categories SET name = ?, description = ? WHERE id = ?`
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
 
-	_, err := r.db.ExecContext(ctx, query, name, description, id)
+	_, err = stmt.ExecContext(ctx, name, description, id)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +147,12 @@ func (r *mysqlCategoryRepository) Update(ctx context.Context, id int, name, desc
 
 func (r *mysqlCategoryRepository) Delete(ctx context.Context, id int) error {
 	query := `DELETE FROM categories WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, id)
 	return err
 }

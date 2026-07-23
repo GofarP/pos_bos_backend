@@ -57,10 +57,12 @@ func (h *ProductHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) GetAllProducts(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	search := r.URL.Query().Get("search")
 
 	req := domain.PaginationRequest{
-		Page:  page,
-		Limit: limit,
+		Page:   page,
+		Limit:  limit,
+		Search: search,
 	}
 
 	res, err := h.service.GetAllProducts(r.Context(), req)

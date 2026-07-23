@@ -18,7 +18,13 @@ func NewTransactionRepository(db *sql.DB) domain.TransactionRepository {
 func (r *mysqlTransactionRepository) CheckIdempotencyKey(ctx context.Context, key string) (bool, error) {
 	var exists bool
 	query := `SELECT EXISTS(SELECT 1 FROM transactions WHERE idempotency_key = ?)`
-	err := r.db.QueryRowContext(ctx, query, key).Scan(&exists)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return false, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRowContext(ctx, key).Scan(&exists)
 	return exists, err
 }
 
@@ -27,11 +33,16 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 	if err != nil {
 		return err
 	}
-
 	defer tx.Rollback()
 
 	queryTx := `INSERT INTO transactions(user_id, invoice_number, total_amount, idempotency_key) values(?,?,?,?)`
-	res, err := tx.ExecContext(ctx, queryTx, txReq.UserID, txReq.InvoiceNumber, 0, txReq.IdempotencyKey)
+	stmtTx, err := tx.PrepareContext(ctx, queryTx)
+	if err != nil {
+		return err
+	}
+	defer stmtTx.Close()
+
+	res, err := stmtTx.ExecContext(ctx, txReq.UserID, txReq.InvoiceNumber, 0, txReq.IdempotencyKey)
 	if err != nil {
 		return err
 	}
@@ -45,12 +56,34 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 
 	var totalAmount int64
 
+	// Prepare statements once outside the loop
+	queryProduct := "SELECT stock, price FROM products WHERE id = ? FOR UPDATE"
+	stmtProduct, err := tx.PrepareContext(ctx, queryProduct)
+	if err != nil {
+		return err
+	}
+	defer stmtProduct.Close()
+
+	queryUpdateProduct := "UPDATE products SET stock = stock - ? WHERE id = ?"
+	stmtUpdateProduct, err := tx.PrepareContext(ctx, queryUpdateProduct)
+	if err != nil {
+		return err
+	}
+	defer stmtUpdateProduct.Close()
+
+	queryItem := `INSERT INTO transaction_items (transaction_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)`
+	stmtItem, err := tx.PrepareContext(ctx, queryItem)
+	if err != nil {
+		return err
+	}
+	defer stmtItem.Close()
+
 	for i, item := range txReq.Items {
 		var currentStock int
 		var price int64
-		err := tx.QueryRowContext(ctx, "SELECT stock, price FROM products WHERE id = ? FOR UPDATE", item.ProductID).Scan(&currentStock, &price)
+		err := stmtProduct.QueryRowContext(ctx, item.ProductID).Scan(&currentStock, &price)
 		if err != nil {
-			return errors.New(("Product not found or failed to lock"))
+			return errors.New("Product not found or failed to lock")
 		}
 
 		if currentStock < item.Quantity {
@@ -62,14 +95,12 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 		txReq.Items[i].Subtotal = subtotal
 		totalAmount += subtotal
 
-		_, err = tx.ExecContext(ctx, "UPDATE products SET stock = stock - ? WHERE id = ?", item.Quantity, item.ProductID)
+		_, err = stmtUpdateProduct.ExecContext(ctx, item.Quantity, item.ProductID)
 		if err != nil {
 			return err
 		}
 
-		queryItem := `INSERT INTO transaction_items (transaction_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)`
-
-		itemRes, err := tx.ExecContext(ctx, queryItem, txReq.ID, item.ProductID, item.Quantity, price, subtotal)
+		itemRes, err := stmtItem.ExecContext(ctx, txReq.ID, item.ProductID, item.Quantity, price, subtotal)
 		if err != nil {
 			return err
 		}
@@ -77,11 +108,16 @@ func (r *mysqlTransactionRepository) CreateTransaction(ctx context.Context, txRe
 		itemID, _ := itemRes.LastInsertId()
 		txReq.Items[i].ID = int(itemID)
 		txReq.Items[i].TransactionID = txReq.ID
-
 	}
 
-	_, err = tx.ExecContext(ctx, "UPDATE transactions SET total_amount=? where id=?", totalAmount, txReq.ID)
+	queryUpdateTx := "UPDATE transactions SET total_amount=? where id=?"
+	stmtUpdateTx, err := tx.PrepareContext(ctx, queryUpdateTx)
+	if err != nil {
+		return err
+	}
+	defer stmtUpdateTx.Close()
 
+	_, err = stmtUpdateTx.ExecContext(ctx, totalAmount, txReq.ID)
 	if err != nil {
 		return err
 	}
@@ -107,7 +143,13 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 
 	var total int
 	countQuery := "SELECT COUNT(id) FROM transactions " + whereQuery
-	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+	stmtCount, err := r.db.PrepareContext(ctx, countQuery)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtCount.Close()
+
+	if err := stmtCount.QueryRowContext(ctx, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -119,9 +161,15 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 	query := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
 	          FROM transactions ` + whereQuery + ` ORDER BY id DESC LIMIT ? OFFSET ?`
 
-	args = append(args, req.Limit, offset)
+	selectArgs := append(args, req.Limit, offset)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	stmtSelect, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtSelect.Close()
+
+	rows, err := stmtSelect.QueryContext(ctx, selectArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -144,8 +192,14 @@ func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id 
 	queryTx := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
 	            FROM transactions WHERE id = ?`
 
+	stmtTx, err := r.db.PrepareContext(ctx, queryTx)
+	if err != nil {
+		return nil, err
+	}
+	defer stmtTx.Close()
+
 	var tx domain.Transaction
-	err := r.db.QueryRowContext(ctx, queryTx, id).Scan(
+	err = stmtTx.QueryRowContext(ctx, id).Scan(
 		&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt,
 	)
 	if err != nil {
@@ -158,7 +212,13 @@ func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id 
 	queryItems := `SELECT id, transaction_id, product_id, quantity, price, subtotal 
 	               FROM transaction_items WHERE transaction_id = ?`
 
-	rows, err := r.db.QueryContext(ctx, queryItems, id)
+	stmtItems, err := r.db.PrepareContext(ctx, queryItems)
+	if err != nil {
+		return nil, err
+	}
+	defer stmtItems.Close()
+
+	rows, err := stmtItems.QueryContext(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +243,14 @@ func (r *mysqlTransactionRepository) CancelTransaction(ctx context.Context, id i
 
 	// 1. Check if transaction can be cancelled
 	var currentStatus string
-	err = tx.QueryRowContext(ctx, "SELECT status FROM transactions WHERE id = ? FOR UPDATE", id).Scan(&currentStatus)
+	queryStatus := "SELECT status FROM transactions WHERE id = ? FOR UPDATE"
+	stmtStatus, err := tx.PrepareContext(ctx, queryStatus)
+	if err != nil {
+		return err
+	}
+	defer stmtStatus.Close()
+
+	err = stmtStatus.QueryRowContext(ctx, id).Scan(&currentStatus)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return domain.ErrTransactionNotFound
@@ -196,7 +263,14 @@ func (r *mysqlTransactionRepository) CancelTransaction(ctx context.Context, id i
 	}
 
 	// 2. Fetch items to return stock
-	rows, err := tx.QueryContext(ctx, "SELECT product_id, quantity FROM transaction_items WHERE transaction_id = ?", id)
+	queryItems := "SELECT product_id, quantity FROM transaction_items WHERE transaction_id = ?"
+	stmtItems, err := tx.PrepareContext(ctx, queryItems)
+	if err != nil {
+		return err
+	}
+	defer stmtItems.Close()
+
+	rows, err := stmtItems.QueryContext(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -217,15 +291,29 @@ func (r *mysqlTransactionRepository) CancelTransaction(ctx context.Context, id i
 	rows.Close()
 
 	// 3. Return stock to products
+	queryReturnStock := "UPDATE products SET stock = stock + ? WHERE id = ?"
+	stmtReturnStock, err := tx.PrepareContext(ctx, queryReturnStock)
+	if err != nil {
+		return err
+	}
+	defer stmtReturnStock.Close()
+
 	for _, i := range itemsToReturn {
-		_, err := tx.ExecContext(ctx, "UPDATE products SET stock = stock + ? WHERE id = ?", i.quantity, i.productID)
+		_, err := stmtReturnStock.ExecContext(ctx, i.quantity, i.productID)
 		if err != nil {
 			return err
 		}
 	}
 
 	// 4. Update status to CANCELLED
-	_, err = tx.ExecContext(ctx, "UPDATE transactions SET status = 'CANCELLED' WHERE id = ?", id)
+	queryCancelTx := "UPDATE transactions SET status = 'CANCELLED' WHERE id = ?"
+	stmtCancelTx, err := tx.PrepareContext(ctx, queryCancelTx)
+	if err != nil {
+		return err
+	}
+	defer stmtCancelTx.Close()
+
+	_, err = stmtCancelTx.ExecContext(ctx, id)
 	if err != nil {
 		return err
 	}

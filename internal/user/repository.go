@@ -21,8 +21,13 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 
 func (repository *mysqlUserRepository) Create(ctx context.Context, user *domain.User) error {
 	query := `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`
+	stmt, err := repository.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-	result, err := repository.db.ExecContext(ctx, query, user.Name, user.Email, user.Password)
+	result, err := stmt.ExecContext(ctx, user.Name, user.Email, user.Password)
 	if err != nil {
 		return err
 	}
@@ -38,9 +43,14 @@ func (repository *mysqlUserRepository) Create(ctx context.Context, user *domain.
 
 func (repository *mysqlUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `SELECT id, name, email, password, photo, created_at, updated_at FROM users WHERE email = ?`
+	stmt, err := repository.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
 
 	var user domain.User
-	err := repository.db.QueryRowContext(ctx, query, email).Scan(
+	err = stmt.QueryRowContext(ctx, email).Scan(
 		&user.ID,
 		&user.Name,
 		&user.Email,
@@ -62,10 +72,16 @@ func (repository *mysqlUserRepository) GetByEmail(ctx context.Context, email str
 
 func (r *mysqlUserRepository) GetByID(ctx context.Context, id int) (*domain.User, error) {
 	query := `SELECT id, name, email, password, photo, created_at, updated_at FROM users WHERE id = ?`
-	row := r.db.QueryRowContext(ctx, query, id)
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	row := stmt.QueryRowContext(ctx, id)
 
 	var user domain.User
-	err := row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.CreatedAt, &user.UpdatedAt)
+	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Return nil if user not found
@@ -90,7 +106,13 @@ func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domai
 
 	// Hitung total data
 	var total int
-	err := repository.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	stmtCount, err := repository.db.PrepareContext(ctx, countQuery)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtCount.Close()
+
+	err = stmtCount.QueryRowContext(ctx, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -100,9 +122,15 @@ func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domai
 	selectQuery += " LIMIT ? OFFSET ?"
 
 	// Tambahkan limit dan offset ke argument
-	args = append(args, request.Limit, offset)
+	selectArgs := append(args, request.Limit, offset)
 
-	rows, err := repository.db.QueryContext(ctx, selectQuery, args...)
+	stmtSelect, err := repository.db.PrepareContext(ctx, selectQuery)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer stmtSelect.Close()
+
+	rows, err := stmtSelect.QueryContext(ctx, selectArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -124,16 +152,26 @@ func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domai
 	return users, total, nil
 }
 
-func (repository *mysqlUserRepository) Update(ctx context.Context, id int, user *domain.User)error{
-	query:=`UPDATE users SET name=?, email=?, photo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+func (repository *mysqlUserRepository) Update(ctx context.Context, id int, user *domain.User) error {
+	query := `UPDATE users SET name=?, email=?, photo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+	stmt, err := repository.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
 
-	_,err:=repository.db.ExecContext(ctx, query, user.Name, user.Email, user.Password, user.Photo, id)
-
+	_, err = stmt.ExecContext(ctx, user.Name, user.Email, user.Photo, id)
 	return err
 }
 
 func (repository *mysqlUserRepository) Delete(ctx context.Context, id int) error {
 	query := "DELETE FROM users WHERE id = ?"
-	_, err := repository.db.ExecContext(ctx, query, id)
+	stmt, err := repository.db.PrepareContext(ctx, query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.ExecContext(ctx, id)
 	return err
 }
