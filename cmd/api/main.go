@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"pos_bos/internal/auth"
 	"pos_bos/internal/category"
@@ -74,6 +75,7 @@ func main() {
 	// Add common middleware
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
+	router.Use(middleware.Timeout(10 * time.Second))
 
 	// 4. Register Routes
 	// Public routes
