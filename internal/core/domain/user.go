@@ -8,13 +8,14 @@ import (
 
 // User represents the users table in the database
 type User struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // Never send password in JSON response
-	Photo     *string   `json:"photo,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int           `json:"id"`
+	Name      string        `json:"name"`
+	Email     string        `json:"email"`
+	Password  string        `json:"-"` // Never send password in JSON response
+	Photo     *string       `json:"photo,omitempty"`
+	Roles     []Role        `json:"roles,omitempty"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
 }
 
 // AddUserRequest represents the incoming request
@@ -23,6 +24,7 @@ type AddUserRequest struct {
 	Email    string  `json:"email" validate:"required,email"`
 	Password string  `json:"password" validate:"required"`
 	Photo    *string `json:"photo,omitempty"`
+	RoleIDs  []int   `json:"role_ids,omitempty"`
 }
 
 type UpdateUserRequest struct {
@@ -30,6 +32,7 @@ type UpdateUserRequest struct {
 	Email    string  `json:"email" validate:"required,email"`
 	Password *string `json:"password,omitempty"`
 	Photo    *string `json:"photo,omitempty"`
+	RoleIDs  []int   `json:"role_ids,omitempty"`
 }
 
 type UserRepository interface {
@@ -39,6 +42,9 @@ type UserRepository interface {
 	GetAll(ctx context.Context, request PaginationRequest) ([]*User, int, error)
 	Update(ctx context.Context, id int, user *User)error
 	Delete(ctx context.Context, id int) error
+	AssignRolesToUser(ctx context.Context, userID int, roleIDs []int) error
+	GetUserRoles(ctx context.Context, userID int) ([]Role, error)
+	GetUsersRoles(ctx context.Context, userIDs []int) (map[int][]Role, error)
 }
 
 // UserService defines the business logic operations for User

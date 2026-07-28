@@ -15,13 +15,25 @@ const UserIDKey contextKey = "user_id"
 
 func JWTMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, `{"error": "Unauthorized: Missing or invalid token format"}`, http.StatusUnauthorized)
+		var tokenString string
+		
+		// Try to get token from cookie first
+		cookie, err := r.Cookie("access_token")
+		if err == nil {
+			tokenString = cookie.Value
+		} else {
+			// Fallback to Authorization header
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+				tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+		}
+
+		if tokenString == "" {
+			http.Error(w, `{"error": "Unauthorized: Missing token"}`, http.StatusUnauthorized)
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		
 		jwtSecret := os.Getenv("JWT_SECRET")
 		if jwtSecret == "" {

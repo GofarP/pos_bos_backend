@@ -7,6 +7,7 @@ import (
 	"pos_bos/internal/core/domain"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -49,6 +50,37 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 		return
 	}
 
+	// Set HttpOnly Cookies
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "access_token",
+		Value:    res.Token,
+		Expires:  time.Now().Add(15 * time.Minute),
+		HttpOnly: true,
+		Secure:   false, // Set true in production (HTTPS)
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    res.RefreshToken,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HttpOnly: true,
+		Secure:   false, 
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "is_logged_in",
+		Value:    "1",
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HttpOnly: false,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	response.JSON(responseWriter, http.StatusOK, map[string]interface{}{
 		"message": "Login successful",
 		"data":    res,
@@ -57,8 +89,16 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 
 func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *http.Request) {
 	var req domain.LogoutRequest
-	if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
-		response.Error(responseWriter, http.StatusBadRequest, "Invalid JSON payload")
+	_ = json.NewDecoder(request.Body).Decode(&req)
+
+	if req.RefreshToken == "" {
+		if cookie, err := request.Cookie("refresh_token"); err == nil {
+			req.RefreshToken = cookie.Value
+		}
+	}
+
+	if req.RefreshToken == "" {
+		response.Error(responseWriter, http.StatusBadRequest, "Missing refresh token")
 		return
 	}
 
@@ -73,13 +113,52 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 		return
 	}
 
+	// Clear Cookies
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "is_logged_in",
+		Value:    "",
+		Expires:  time.Now().Add(-1 * time.Hour),
+		HttpOnly: false,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
 	response.JSON(responseWriter, http.StatusOK, map[string]string{"message": "Successfully logged out"})
 }
 
 func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request *http.Request) {
 	var req domain.RefreshRequest
-	if err := json.NewDecoder(request.Body).Decode(&req); err != nil {
-		response.Error(responseWriter, http.StatusBadRequest, "Invalid JSON payload")
+	_ = json.NewDecoder(request.Body).Decode(&req)
+
+	if req.RefreshToken == "" {
+		if cookie, err := request.Cookie("refresh_token"); err == nil {
+			req.RefreshToken = cookie.Value
+		}
+	}
+
+	if req.RefreshToken == "" {
+		response.Error(responseWriter, http.StatusBadRequest, "Missing refresh token")
 		return
 	}
 
@@ -94,6 +173,37 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 		response.Error(responseWriter, http.StatusUnauthorized, err.Error())
 		return
 	}
+
+	// Set New Cookies
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "access_token",
+		Value:    res.Token,
+		Expires:  time.Now().Add(15 * time.Minute),
+		HttpOnly: true,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    res.RefreshToken,
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HttpOnly: true,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(responseWriter, &http.Cookie{
+		Name:     "is_logged_in",
+		Value:    "1",
+		Expires:  time.Now().Add(7 * 24 * time.Hour),
+		HttpOnly: false,
+		Secure:   false,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	response.JSON(responseWriter, http.StatusOK, res)
 }

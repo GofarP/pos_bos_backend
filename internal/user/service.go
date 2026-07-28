@@ -56,6 +56,18 @@ func (service *userService) AddUser(ctx context.Context, request domain.AddUserR
 		return nil, err
 	}
 
+	if len(request.RoleIDs) > 0 {
+		err = service.repository.AssignRolesToUser(ctx, newUser.ID, request.RoleIDs)
+		if err != nil {
+			return nil, err
+		}
+		
+		roles, err := service.repository.GetUserRoles(ctx, newUser.ID)
+		if err == nil {
+			newUser.Roles = roles
+		}
+	}
+
 	return newUser, nil
 }
 
@@ -67,6 +79,12 @@ func (s *userService) GetByID(ctx context.Context, id int) (*domain.User, error)
 	if user == nil {
 		return nil, errors.New("user not found")
 	}
+
+	roles, err := s.repository.GetUserRoles(ctx, user.ID)
+	if err == nil {
+		user.Roles = roles
+	}
+
 	return user, nil
 }
 
@@ -88,6 +106,24 @@ func (service *userService) GetAllUsers(ctx context.Context, request domain.Pagi
 		totalPages++
 	}
 
+	if len(users) > 0 {
+		userIDs := make([]int, len(users))
+		for i, u := range users {
+			userIDs[i] = u.ID
+		}
+		
+		rolesMap, err := service.repository.GetUsersRoles(ctx, userIDs)
+		if err == nil {
+			for _, u := range users {
+				if roles, ok := rolesMap[u.ID]; ok {
+					u.Roles = roles
+				} else {
+					u.Roles = []domain.Role{}
+				}
+			}
+		}
+	}
+
 	return domain.PaginationResponse{
 		Data: users,
 		Meta: domain.PaginationMeta{
@@ -104,10 +140,22 @@ func (service *userService) UpdateUser(ctx context.Context, id int, request doma
 		return nil, validation.FormatValidationError(err)
 	}
 
+	existingUser, err := service.repository.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existingUser == nil {
+		return nil, errors.New("user not found")
+	}
+
 	user := &domain.User{
 		Name:  request.Name,
 		Email: request.Email,
 		Photo: request.Photo,
+	}
+
+	if request.Photo == nil {
+		user.Photo = existingUser.Photo
 	}
 
 	if request.Password != nil && *request.Password != "" {
@@ -118,12 +166,24 @@ func (service *userService) UpdateUser(ctx context.Context, id int, request doma
 		user.Password = string(hashedPassword)
 	}
 
-	err := service.repository.Update(ctx, id, user)
+	err = service.repository.Update(ctx, id, user)
 	if err != nil {
 		return nil, err
 	}
-
 	user.ID = id
+
+	if request.RoleIDs != nil {
+		err = service.repository.AssignRolesToUser(ctx, id, request.RoleIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	roles, err := service.repository.GetUserRoles(ctx, id)
+	if err == nil {
+		user.Roles = roles
+	}
+
 	return user, nil
 }
 

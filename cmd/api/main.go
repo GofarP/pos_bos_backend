@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"pos_bos/internal/auth"
@@ -73,9 +75,19 @@ func main() {
 	// 3. Initialize Router
 	router := chi.NewRouter()
 
+	// Parse allowed origins dari .env
+	allowedOriginsStr := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsStr == "" {
+		allowedOriginsStr = "http://localhost:3000"
+	}
+	allowedOrigins := strings.Split(allowedOriginsStr, ",")
+	for i := range allowedOrigins {
+		allowedOrigins[i] = strings.TrimSpace(allowedOrigins[i])
+	}
+
 	// Add CORS middleware
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000"}, // Diperketat khusus untuk frontend Nuxt
+		AllowedOrigins:   allowedOrigins, // Diperketat, baca dari env atau default localhost:3000
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -87,6 +99,33 @@ func main() {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(10 * time.Second))
+
+	// Serve static files for uploaded photos with hotlink protection
+	workDir, _ := os.Getwd()
+	filesDir := http.Dir(filepath.Join(workDir, "uploads"))
+	
+	router.Group(func(r chi.Router) {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				referer := r.Header.Get("Referer")
+				
+				isAllowed := false
+				for _, origin := range allowedOrigins {
+					if strings.HasPrefix(referer, origin) {
+						isAllowed = true
+						break
+					}
+				}
+
+				if !isAllowed {
+					http.Error(w, "Forbidden: Akses gambar secara langsung tidak diizinkan", http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
+		r.Handle("/uploads/*", http.StripPrefix("/uploads/", http.FileServer(filesDir)))
+	})
 
 	// 4. Register Routes
 	// Public routes

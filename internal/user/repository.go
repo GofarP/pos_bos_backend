@@ -20,14 +20,14 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 }
 
 func (repository *mysqlUserRepository) Create(ctx context.Context, user *domain.User) error {
-	query := `INSERT INTO users (name, email, password) VALUES (?, ?, ?)`
+	query := `INSERT INTO users (name, email, password, photo) VALUES (?, ?, ?, ?)`
 	stmt, err := repository.db.PrepareContext(ctx, query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	result, err := stmt.ExecContext(ctx, user.Name, user.Email, user.Password)
+	result, err := stmt.ExecContext(ctx, user.Name, user.Email, user.Password, user.Photo)
 	if err != nil {
 		return err
 	}
@@ -174,4 +174,95 @@ func (repository *mysqlUserRepository) Delete(ctx context.Context, id int) error
 
 	_, err = stmt.ExecContext(ctx, id)
 	return err
+}
+
+func (r *mysqlUserRepository) AssignRolesToUser(ctx context.Context, userID int, roleIDs []int) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	deleteQuery := `DELETE FROM user_roles WHERE user_id = ?`
+	if _, err := tx.ExecContext(ctx, deleteQuery, userID); err != nil {
+		return err
+	}
+
+	insertQuery := `INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)`
+	stmtInsert, err := tx.PrepareContext(ctx, insertQuery)
+	if err != nil {
+		return err
+	}
+	defer stmtInsert.Close()
+
+	for _, roleID := range roleIDs {
+		if _, err := stmtInsert.ExecContext(ctx, userID, roleID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *mysqlUserRepository) GetUserRoles(ctx context.Context, userID int) ([]domain.Role, error) {
+	query := `
+		SELECT r.id, r.name, r.created_at, r.updated_at 
+		FROM roles r
+		INNER JOIN user_roles ur ON r.id = ur.role_id
+		WHERE ur.user_id = ?
+	`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var roles []domain.Role
+	for rows.Next() {
+		var role domain.Role
+		if err := rows.Scan(&role.ID, &role.Name, &role.CreatedAt, &role.UpdatedAt); err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, nil
+}
+
+func (r *mysqlUserRepository) GetUsersRoles(ctx context.Context, userIDs []int) (map[int][]domain.Role, error) {
+	if len(userIDs) == 0 {
+		return make(map[int][]domain.Role), nil
+	}
+
+	args := make([]interface{}, len(userIDs))
+	placeholders := ""
+	for i, id := range userIDs {
+		args[i] = id
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "?"
+	}
+
+	query := `
+		SELECT ur.user_id, r.id, r.name, r.created_at, r.updated_at 
+		FROM roles r
+		INNER JOIN user_roles ur ON r.id = ur.role_id
+		WHERE ur.user_id IN (` + placeholders + `)
+	`
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	rolesMap := make(map[int][]domain.Role)
+	for rows.Next() {
+		var userID int
+		var role domain.Role
+		if err := rows.Scan(&userID, &role.ID, &role.Name, &role.CreatedAt, &role.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rolesMap[userID] = append(rolesMap[userID], role)
+	}
+	return rolesMap, nil
 }

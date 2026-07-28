@@ -72,11 +72,20 @@ func (handler *UserHandler) AddUser(responseWriter http.ResponseWriter, request 
 		return
 	}
 
+	roleIDsStr := request.Form["role_ids[]"]
+	var roleIDs []int
+	for _, idStr := range roleIDsStr {
+		if id, err := strconv.Atoi(idStr); err == nil {
+			roleIDs = append(roleIDs, id)
+		}
+	}
+
 	userRequest := domain.AddUserRequest{
 		Name:     request.FormValue("name"),
 		Email:    request.FormValue("email"),
 		Password: request.FormValue("password"),
 		Photo:    photoPath,
+		RoleIDs:  roleIDs,
 	}
 
 	user, err := handler.service.AddUser(request.Context(), userRequest)
@@ -129,11 +138,20 @@ func (handler *UserHandler) UpdateUser(responseWriter http.ResponseWriter, reque
 		passwordPtr = &password
 	}
 
+	roleIDsStr := request.Form["role_ids[]"]
+	var roleIDs []int
+	for _, idStr := range roleIDsStr {
+		if id, err := strconv.Atoi(idStr); err == nil {
+			roleIDs = append(roleIDs, id)
+		}
+	}
+
 	updateRequest := domain.UpdateUserRequest{
 		Name:     request.FormValue("name"),
 		Email:    request.FormValue("email"),
 		Password: passwordPtr,
 		Photo:    photoPath,
+		RoleIDs:  roleIDs,
 	}
 
 	user, err := handler.service.UpdateUser(request.Context(), id, updateRequest)
