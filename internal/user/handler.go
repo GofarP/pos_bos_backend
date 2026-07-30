@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"pos_bos/internal/core/domain"
+	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
 
@@ -29,11 +30,11 @@ func NewUserHandler(service domain.UserService) *UserHandler {
 	}
 }
 
-func (handler *UserHandler) RegisterRoutes(router chi.Router) {
-	router.Post("/users", handler.AddUser)
-	router.Get("/users", handler.GetUsers)
-	router.Put("/users/{id}", handler.UpdateUser)
-	router.Delete("/users/{id}", handler.DeleteUser)
+func (handler *UserHandler) RegisterRoutes(router chi.Router, rbacRepo domain.RBACRepository) {
+	router.With(middleware.RequirePermission("create.user", rbacRepo)).Post("/users", handler.AddUser)
+	router.With(middleware.RequirePermission("view.user", rbacRepo)).Get("/users", handler.GetUsers)
+	router.With(middleware.RequirePermission("edit.user", rbacRepo)).Put("/users/{id}", handler.UpdateUser)
+	router.With(middleware.RequirePermission("delete.user", rbacRepo)).Delete("/users/{id}", handler.DeleteUser)
 }
 
 func (handler *UserHandler) GetUsers(responseWriter http.ResponseWriter, request *http.Request) {

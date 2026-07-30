@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"pos_bos/internal/core/domain"
+	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
 	"strconv"
@@ -20,12 +21,12 @@ func NewCategoryHandler(service domain.CategoryService) *CategoryHandler {
 	return &CategoryHandler{service: service}
 }
 
-func (handler *CategoryHandler) RegisterRoutes(router chi.Router) {
-	router.Post("/categories", handler.CreateCategory)
-	router.Get("/categories", handler.GetAllCategories)
-	router.Get("/categories/{id}", handler.GetCategoryByID)
-	router.Put("/categories/{id}", handler.UpdateCategory)
-	router.Delete("/categories/{id}", handler.DeleteCategory)
+func (handler *CategoryHandler) RegisterRoutes(router chi.Router, rbacRepo domain.RBACRepository) {
+	router.With(middleware.RequirePermission("view.category", rbacRepo)).Get("/categories", handler.GetAllCategories)
+	router.With(middleware.RequirePermission("view.category", rbacRepo)).Get("/categories/{id}", handler.GetCategoryByID)
+	router.With(middleware.RequirePermission("create.category", rbacRepo)).Post("/categories", handler.CreateCategory)
+	router.With(middleware.RequirePermission("edit.category", rbacRepo)).Put("/categories/{id}", handler.UpdateCategory)
+	router.With(middleware.RequirePermission("delete.category", rbacRepo)).Delete("/categories/{id}", handler.DeleteCategory)
 }
 
 func (handler *CategoryHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {

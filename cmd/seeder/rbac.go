@@ -52,10 +52,11 @@ func seedRBAC(db *sql.DB) {
 
 	var cashierID int
 	if err := db.QueryRow("SELECT id FROM roles WHERE name = 'Cashier'").Scan(&cashierID); err == nil {
+		db.Exec("DELETE FROM role_permissions WHERE role_id = ?", cashierID)
 		cashierPerms := []string{
-			"view.category",
 			"view.product",
-			"view.transaction", "create.transaction",
+			"view.transaction",
+			"create.transaction",
 		}
 		for _, p := range cashierPerms {
 			var permID int
@@ -66,15 +67,23 @@ func seedRBAC(db *sql.DB) {
 	}
 	log.Println("✅ Role Permissions berhasil di-seed.")
 
-	// 4. Attach Superadmin to Admin User
+	// 4. Attach Roles to Users cleanly
 	adminEmail := os.Getenv("ADMIN_EMAIL")
 	if adminEmail == "" {
-		adminEmail = "admin@posbos.com" // fallback matching users.go
+		adminEmail = "admin@posbos.com"
 	}
 
 	var adminUserID int
 	if err := db.QueryRow("SELECT id FROM users WHERE email = ?", adminEmail).Scan(&adminUserID); err == nil {
+		db.Exec("DELETE FROM user_roles WHERE user_id = ?", adminUserID)
 		db.Exec("INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)", adminUserID, superadminID)
 		log.Println("✅ Superadmin role attached to Admin User.")
+	}
+
+	var cashierUserID int
+	if err := db.QueryRow("SELECT id FROM users WHERE email = 'kasir@posbos.com'").Scan(&cashierUserID); err == nil {
+		db.Exec("DELETE FROM user_roles WHERE user_id = ?", cashierUserID)
+		db.Exec("INSERT IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)", cashierUserID, cashierID)
+		log.Println("✅ Cashier role attached to Kasir User (kasir@posbos.com).")
 	}
 }

@@ -19,11 +19,11 @@ type Product struct {
 }
 
 type ProductRequest struct {
-	CategoryID  *int    `json:"category_id"`
+	CategoryID  *int    `json:"category_id" validate:"required"`
 	SKU         *string `json:"sku" validate:"omitempty,max=100"`
 	Name        string  `json:"name" validate:"required,max=255"`
 	Description *string `json:"description"`
-	Price       int64 `json:"price" validate:"required,min=0"`
+	Price       int64   `json:"price" validate:"required,min=0"`
 	Stock       int     `json:"stock" validate:"min=0"`
 }
 

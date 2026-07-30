@@ -24,6 +24,8 @@ func FormatValidationError(err error) error {
 				valErrors[field] = field + " is required"
 			case "email":
 				valErrors[field] = "invalid email format"
+			case "min":
+				valErrors[field] = field + " minimum length is " + e.Param()
 			default:
 				valErrors[field] = e.Error()
 			}

@@ -16,3 +16,6 @@
 
 # Environment file
 .env
+
+# Uploads directory
+uploads/

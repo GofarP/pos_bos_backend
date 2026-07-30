@@ -11,6 +11,7 @@ var ErrTransactionNotFound = errors.New("transaction not found")
 type Transaction struct {
 	ID             int               `json:"id"`
 	UserID         int               `json:"user_id"`
+	UserName       string            `json:"user_name,omitempty"`
 	InvoiceNumber  string            `json:"invoice_number"`
 	TotalAmount    int64             `json:"total_amount"`
 	IdempotencyKey string            `json:"idempotency_key"`
@@ -29,12 +30,14 @@ type TransactionFilterRequest struct {
 }
 
 type TransactionItem struct {
-	ID            int     `json:"id"`
-	TransactionID int     `json:"transaction_id"`
-	ProductID     int     `json:"product_id"`
-	Quantity      int     `json:"quantity"`
-	Price         int64   `json:"price"`
-	Subtotal      int64   `json:"subtotal"`
+	ID            int    `json:"id"`
+	TransactionID int    `json:"transaction_id"`
+	ProductID     int    `json:"product_id"`
+	ProductName   string `json:"product_name,omitempty"`
+	ProductSKU    string `json:"product_sku,omitempty"`
+	Quantity      int    `json:"quantity"`
+	Price         int64  `json:"price"`
+	Subtotal      int64  `json:"subtotal"`
 }
 
 type TransactionItemRequest struct {
@@ -48,12 +51,19 @@ type TransactionRequest struct {
 	Items          []TransactionItemRequest `json:"items" validate:"required,min=1,dive"`
 }
 
+type DashboardSummary struct {
+	TotalSales   int64 `json:"total_sales"`
+	NewOrders    int   `json:"new_orders"`
+	ProductsSold int   `json:"products_sold"`
+}
+
 type TransactionRepository interface {
 	CheckIdempotencyKey(ctx context.Context, key string) (bool, error)
 	CreateTransaction(ctx context.Context, txReq *Transaction) error
 	GetAllTransactions(ctx context.Context, req TransactionFilterRequest) ([]Transaction, int, error)
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 	CancelTransaction(ctx context.Context, id int) error
+	GetDashboardSummary(ctx context.Context) (*DashboardSummary, error)
 }
 
 type TransactionService interface {
@@ -61,4 +71,5 @@ type TransactionService interface {
 	GetAllTransactions(ctx context.Context, req TransactionFilterRequest) (PaginationResponse, error)
 	GetTransactionByID(ctx context.Context, id int) (*Transaction, error)
 	CancelTransaction(ctx context.Context, id int) error
+	GetDashboardSummary(ctx context.Context) (*DashboardSummary, error)
 }

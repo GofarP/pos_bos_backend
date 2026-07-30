@@ -158,8 +158,9 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 		offset = 0
 	}
 
-	query := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
-	          FROM transactions ` + whereQuery + ` ORDER BY id DESC LIMIT ? OFFSET ?`
+	query := `SELECT t.id, t.user_id, COALESCE(u.name, '') as user_name, t.invoice_number, t.total_amount, t.idempotency_key, t.status, t.created_at, t.updated_at 
+	          FROM transactions t
+	          LEFT JOIN users u ON t.user_id = u.id ` + whereQuery + ` ORDER BY t.id DESC LIMIT ? OFFSET ?`
 
 	selectArgs := append(args, req.Limit, offset)
 
@@ -178,7 +179,7 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 	var transactions []domain.Transaction
 	for rows.Next() {
 		var tx domain.Transaction
-		err := rows.Scan(&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt)
+		err := rows.Scan(&tx.ID, &tx.UserID, &tx.UserName, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -188,9 +189,10 @@ func (r *mysqlTransactionRepository) GetAllTransactions(ctx context.Context, req
 }
 
 func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id int) (*domain.Transaction, error) {
-	// 1. Ambil Data Header Transaksi
-	queryTx := `SELECT id, user_id, invoice_number, total_amount, idempotency_key, status, created_at, updated_at 
-	            FROM transactions WHERE id = ?`
+	queryTx := `SELECT t.id, t.user_id, COALESCE(u.name, '') as user_name, t.invoice_number, t.total_amount, t.idempotency_key, t.status, t.created_at, t.updated_at 
+	            FROM transactions t
+	            LEFT JOIN users u ON t.user_id = u.id
+	            WHERE t.id = ?`
 
 	stmtTx, err := r.db.PrepareContext(ctx, queryTx)
 	if err != nil {
@@ -200,17 +202,19 @@ func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id 
 
 	var tx domain.Transaction
 	err = stmtTx.QueryRowContext(ctx, id).Scan(
-		&tx.ID, &tx.UserID, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt,
+		&tx.ID, &tx.UserID, &tx.UserName, &tx.InvoiceNumber, &tx.TotalAmount, &tx.IdempotencyKey, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // Return nil jika tidak ditemukan
+			return nil, nil
 		}
 		return nil, err
 	}
-	// 2. Ambil Data Detail Item-nya
-	queryItems := `SELECT id, transaction_id, product_id, quantity, price, subtotal 
-	               FROM transaction_items WHERE transaction_id = ?`
+
+	queryItems := `SELECT ti.id, ti.transaction_id, ti.product_id, COALESCE(p.name, '') as product_name, COALESCE(p.sku, '') as product_sku, ti.quantity, ti.price, ti.subtotal 
+	               FROM transaction_items ti
+	               LEFT JOIN products p ON ti.product_id = p.id
+	               WHERE ti.transaction_id = ?`
 
 	stmtItems, err := r.db.PrepareContext(ctx, queryItems)
 	if err != nil {
@@ -223,9 +227,11 @@ func (r *mysqlTransactionRepository) GetTransactionByID(ctx context.Context, id 
 		return nil, err
 	}
 	defer rows.Close()
+
+	tx.Items = []domain.TransactionItem{}
 	for rows.Next() {
 		var item domain.TransactionItem
-		err := rows.Scan(&item.ID, &item.TransactionID, &item.ProductID, &item.Quantity, &item.Price, &item.Subtotal)
+		err := rows.Scan(&item.ID, &item.TransactionID, &item.ProductID, &item.ProductName, &item.ProductSKU, &item.Quantity, &item.Price, &item.Subtotal)
 		if err != nil {
 			return nil, err
 		}
@@ -319,4 +325,34 @@ func (r *mysqlTransactionRepository) CancelTransaction(ctx context.Context, id i
 	}
 
 	return tx.Commit()
+}
+
+func (r *mysqlTransactionRepository) GetDashboardSummary(ctx context.Context) (*domain.DashboardSummary, error) {
+	query := `
+		SELECT 
+			COALESCE(SUM(total_amount), 0) as total_sales,
+			COUNT(id) as new_orders,
+			COALESCE((
+				SELECT SUM(ti.quantity) 
+				FROM transaction_items ti 
+				JOIN transactions t2 ON ti.transaction_id = t2.id 
+				WHERE DATE(t2.created_at) = CURDATE() AND t2.status = 'COMPLETED'
+			), 0) as products_sold
+		FROM transactions
+		WHERE DATE(created_at) = CURDATE() AND status = 'COMPLETED'
+	`
+
+	stmt, err := r.db.PrepareContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	var summary domain.DashboardSummary
+	err = stmt.QueryRowContext(ctx).Scan(&summary.TotalSales, &summary.NewOrders, &summary.ProductsSold)
+	if err != nil {
+		return nil, err
+	}
+
+	return &summary, nil
 }

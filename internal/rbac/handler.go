@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"pos_bos/internal/core/domain"
+	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
 
@@ -23,16 +24,16 @@ func NewRBACHandler(service domain.RBACService) *RBACHandler {
 	}
 }
 
-func (handler *RBACHandler) RegisterRoutes(router chi.Router) {
-	router.Post("/permissions", handler.CreatePermission)
-	router.Get("/permissions", handler.GetPermissions)
-	router.Put("/permissions/{id}", handler.UpdatePermission)
-	router.Delete("/permissions/{id}", handler.DeletePermission)
+func (handler *RBACHandler) RegisterRoutes(router chi.Router, rbacRepo domain.RBACRepository) {
+	router.With(middleware.RequirePermission("create.permission", rbacRepo)).Post("/permissions", handler.CreatePermission)
+	router.With(middleware.RequirePermission("view.permission", rbacRepo)).Get("/permissions", handler.GetPermissions)
+	router.With(middleware.RequirePermission("edit.permission", rbacRepo)).Put("/permissions/{id}", handler.UpdatePermission)
+	router.With(middleware.RequirePermission("delete.permission", rbacRepo)).Delete("/permissions/{id}", handler.DeletePermission)
 
-	router.Post("/roles", handler.CreateRole)
-	router.Get("/roles", handler.GetAllRoles)
-	router.Put("/roles/{id}", handler.UpdateRole)
-	router.Delete("/roles/{id}", handler.DeleteRole)
+	router.With(middleware.RequirePermission("create.role", rbacRepo)).Post("/roles", handler.CreateRole)
+	router.With(middleware.RequirePermission("view.role", rbacRepo)).Get("/roles", handler.GetAllRoles)
+	router.With(middleware.RequirePermission("edit.role", rbacRepo)).Put("/roles/{id}", handler.UpdateRole)
+	router.With(middleware.RequirePermission("delete.role", rbacRepo)).Delete("/roles/{id}", handler.DeleteRole)
 }
 
 func (handler *RBACHandler) GetPermissions(responseWriter http.ResponseWriter, request *http.Request) {

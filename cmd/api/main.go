@@ -52,13 +52,13 @@ func main() {
 	userService := user.NewUserService(userRepo)
 	userHandler := user.NewUserHandler(userService)
 
-	authRepo := auth.NewAuthRepository(db)
-	authService := auth.NewAuthService(userRepo, authRepo)
-	authHandler := auth.NewAuthHandler(authService)
-
 	rbacRepo := rbac.NewRBACRepository(db)
 	rbacService := rbac.NewRBACService(rbacRepo)
 	rbacHandler := rbac.NewRBACHandler(rbacService)
+
+	authRepo := auth.NewAuthRepository(db)
+	authService := auth.NewAuthService(userRepo, authRepo, rbacRepo)
+	authHandler := auth.NewAuthHandler(authService)
 
 	categoryRepo := category.NewCategoryRepository(db)
 	categoryService := category.NewCategoryService(categoryRepo)
@@ -137,17 +137,12 @@ func main() {
 		// Semua route yang didaftarkan di dalam r.Group ini tidak akan bisa diakses jika token tidak valid/kosong.
 		r.Use(customMiddleware.JWTMiddleware)
 
-		// Daftarkan route permissions di sini (otomatis dilindungi JWT)
-		rbacHandler.RegisterRoutes(r)
-
-		// Daftarkan route users di sini (dilindungi JWT)
-		userHandler.RegisterRoutes(r)
-
-		categoryHandler.RegisterRoutes(r)
-
-		productHandler.RegisterRoutes(r)
-
-		txHandler.RegisterRoutes(r)
+		authHandler.RegisterProtectedRoutes(r)
+		rbacHandler.RegisterRoutes(r, rbacRepo)
+		userHandler.RegisterRoutes(r, rbacRepo)
+		categoryHandler.RegisterRoutes(r, rbacRepo)
+		productHandler.RegisterRoutes(r, rbacRepo)
+		txHandler.RegisterRoutes(r, rbacRepo)
 	})
 
 	// 5. Start Server

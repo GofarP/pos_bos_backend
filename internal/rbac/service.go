@@ -190,3 +190,8 @@ func (s *rbacService) UpdateRole(ctx context.Context, id int, req domain.RoleReq
 func (s *rbacService) DeleteRole(ctx context.Context, id int) error {
 	return s.rbacRepo.DeleteRole(ctx, id)
 }
+
+func (s *rbacService) GetUserPermissions(ctx context.Context, userID int) ([]string, error) {
+	return s.rbacRepo.GetUserPermissions(ctx, userID)
+}
+

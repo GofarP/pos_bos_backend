@@ -113,3 +113,7 @@ func (s *transactionService) CancelTransaction(ctx context.Context, id int) erro
 	}
 	return nil
 }
+
+func (s *transactionService) GetDashboardSummary(ctx context.Context) (*domain.DashboardSummary, error) {
+	return s.repo.GetDashboardSummary(ctx)
+}

@@ -35,6 +35,7 @@ type RBACRepository interface {
 	AssignPermissionToRole(ctx context.Context, roleID int, permissionIDs []int) error
 	GetRolePermissions(ctx context.Context, roleID int) ([]Permission, error)
 	CheckRoleNameExists(ctx context.Context, name string) (bool, error)
+	GetUserPermissions(ctx context.Context, userID int) ([]string, error)
 }
 
 type RBACService interface {
@@ -47,6 +48,7 @@ type RBACService interface {
 	GetAllRoles(ctx context.Context, req PaginationRequest) (PaginationResponse, error)
 	UpdateRole(ctx context.Context, id int, req RoleRequest) (*RoleResponse, error)
 	DeleteRole(ctx context.Context, id int) error
+	GetUserPermissions(ctx context.Context, userID int) ([]string, error)
 }
 
 type PermissionRequest struct {

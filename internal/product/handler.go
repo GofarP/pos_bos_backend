@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"pos_bos/internal/core/domain"
+	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
 	"strconv"
@@ -20,13 +21,13 @@ func NewProductHandler(service domain.ProductService) *ProductHandler {
 	return &ProductHandler{service: service}
 }
 
-func (h *ProductHandler) RegisterRoutes(router chi.Router) {
+func (h *ProductHandler) RegisterRoutes(router chi.Router, rbacRepo domain.RBACRepository) {
 	router.Route("/products", func(r chi.Router) {
-		r.Post("/", h.CreateProduct)
-		r.Get("/", h.GetAllProducts)
-		r.Get("/{id}", h.GetProductByID)
-		r.Put("/{id}", h.UpdateProduct)
-		r.Delete("/{id}", h.DeleteProduct)
+		r.With(middleware.RequirePermission("create.product", rbacRepo)).Post("/", h.CreateProduct)
+		r.With(middleware.RequirePermission("view.product", rbacRepo)).Get("/", h.GetAllProducts)
+		r.With(middleware.RequirePermission("view.product", rbacRepo)).Get("/{id}", h.GetProductByID)
+		r.With(middleware.RequirePermission("edit.product", rbacRepo)).Put("/{id}", h.UpdateProduct)
+		r.With(middleware.RequirePermission("delete.product", rbacRepo)).Delete("/{id}", h.DeleteProduct)
 	})
 }
 

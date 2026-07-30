@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"pos_bos/internal/core/domain"
+	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
 	"pos_bos/pkg/validation"
 	"time"
@@ -26,6 +27,39 @@ func (handler *AuthHandler) RegisterRoutes(router chi.Router) {
 	router.Post("/login", handler.Login)
 	router.Post("/logout", handler.Logout)
 	router.Post("/refresh", handler.Refresh)
+}
+
+func (handler *AuthHandler) RegisterProtectedRoutes(router chi.Router) {
+	router.Get("/me", handler.GetMe)
+}
+
+func (handler *AuthHandler) GetMe(responseWriter http.ResponseWriter, request *http.Request) {
+	userIDVal := request.Context().Value(middleware.UserIDKey)
+	if userIDVal == nil {
+		response.Error(responseWriter, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	var userID int
+	switch v := userIDVal.(type) {
+	case float64:
+		userID = int(v)
+	case int:
+		userID = v
+	default:
+		response.Error(responseWriter, http.StatusInternalServerError, "Invalid user ID format")
+		return
+	}
+
+	user, err := handler.service.GetMe(request.Context(), userID)
+	if err != nil {
+		response.Error(responseWriter, http.StatusNotFound, "User not found")
+		return
+	}
+
+	response.JSON(responseWriter, http.StatusOK, map[string]interface{}{
+		"data": user,
+	})
 }
 
 func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *http.Request) {

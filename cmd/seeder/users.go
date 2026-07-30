@@ -12,44 +12,50 @@ import (
 func seedAdminUser(db *sql.DB) {
 	log.Println("Menjalankan seeder untuk tabel users...")
 
-	// Data Admin yang akan di-seed (diambil dari .env)
 	adminName := "Super Admin"
 	adminEmail := os.Getenv("ADMIN_EMAIL")
 	if adminEmail == "" {
-		adminEmail = "admin@posbos.com" // fallback
+		adminEmail = "admin@posbos.com"
 	}
 	
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 	if adminPassword == "" {
-		adminPassword = "admin123" // fallback
+		adminPassword = "admin123"
 	}
 
-	// Hash Password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 	if err != nil {
 		log.Fatalf("Gagal melakukan hashing password: %v", err)
 	}
 
-	var count int
-	err = db.QueryRow("SELECT COUNT(id) FROM users WHERE email = ?", adminEmail).Scan(&count)
-	if err != nil {
-		log.Fatalf("Gagal mengecek data user: %v", err)
-	}
+	var adminCount int
+	db.QueryRow("SELECT COUNT(id) FROM users WHERE email = ?", adminEmail).Scan(&adminCount)
 
-	if count > 0 {
-		log.Println("Seeder dibatalkan: Admin sudah ada di database.")
-		return
-	}
-
-	// Insert ke Database
-	query := `INSERT INTO users (name, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
 	now := time.Now()
-
-	_, err = db.Exec(query, adminName, adminEmail, string(hashedPassword), now, now)
-	if err != nil {
-		log.Fatalf("Gagal memasukkan data admin: %v", err)
+	if adminCount == 0 {
+		query := `INSERT INTO users (name, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
+		_, err = db.Exec(query, adminName, adminEmail, string(hashedPassword), now, now)
+		if err != nil {
+			log.Fatalf("Gagal memasukkan data admin: %v", err)
+		}
+		log.Println("✅ Sukses! Akun admin telah dibuat (admin@posbos.com / admin123).")
 	}
 
-	log.Println("✅ Sukses! Akun admin telah dibuat.")
-	log.Printf("Email: %s | Password: %s\n", adminEmail, adminPassword)
+	cashierName := "Kasir Toko"
+	cashierEmail := "kasir@posbos.com"
+	cashierPassword := "kasir123"
+
+	var cashierCount int
+	db.QueryRow("SELECT COUNT(id) FROM users WHERE email = ?", cashierEmail).Scan(&cashierCount)
+
+	if cashierCount == 0 {
+		hashedCashierPassword, err := bcrypt.GenerateFromPassword([]byte(cashierPassword), bcrypt.DefaultCost)
+		if err == nil {
+			query := `INSERT INTO users (name, email, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`
+			_, err = db.Exec(query, cashierName, cashierEmail, string(hashedCashierPassword), now, now)
+			if err == nil {
+				log.Println("✅ Sukses! Akun kasir telah dibuat (kasir@posbos.com / kasir123).")
+			}
+		}
+	}
 }

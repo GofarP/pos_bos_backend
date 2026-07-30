@@ -24,13 +24,15 @@ var (
 type authService struct {
 	userRepo domain.UserRepository
 	authRepo domain.AuthRepository
+	rbacRepo domain.RBACRepository
 	validate *validator.Validate
 }
 
-func NewAuthService(userRepo domain.UserRepository, authRepo domain.AuthRepository) domain.AuthService {
+func NewAuthService(userRepo domain.UserRepository, authRepo domain.AuthRepository, rbacRepo domain.RBACRepository) domain.AuthService {
 	return &authService{
 		userRepo: userRepo,
 		authRepo: authRepo,
+		rbacRepo: rbacRepo,
 		validate: validator.New(),
 	}
 }
@@ -81,6 +83,8 @@ func (service *authService) Login(ctx context.Context, request domain.LoginReque
 	if err := service.authRepo.StoreRefreshToken(ctx, user.ID, hashedToken, expiresAt); err != nil {
 		return domain.LoginResponse{}, err
 	}
+
+	service.populateUser(ctx, user)
 
 	return domain.LoginResponse{
 		Token:        tokenString,
@@ -145,11 +149,31 @@ func (service *authService) Refresh(ctx context.Context, request domain.RefreshR
 		return domain.LoginResponse{}, err
 	}
 
-	// We can choose to rotate the refresh token or keep using the same one until it expires.
-	// For simplicity, we return the same refresh token (it will expire in up to 7 days from initial login).
+	service.populateUser(ctx, user)
+
 	return domain.LoginResponse{
 		Token:        tokenString,
 		RefreshToken: request.RefreshToken,
 		User:         *user,
 	}, nil
 }
+
+func (service *authService) GetMe(ctx context.Context, userID int) (*domain.User, error) {
+	user, err := service.userRepo.GetByID(ctx, userID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	service.populateUser(ctx, user)
+	return user, nil
+}
+
+func (service *authService) populateUser(ctx context.Context, user *domain.User) {
+	if roles, err := service.userRepo.GetUserRoles(ctx, user.ID); err == nil {
+		user.Roles = roles
+	}
+	if perms, err := service.rbacRepo.GetUserPermissions(ctx, user.ID); err == nil {
+		user.Permissions = perms
+	}
+}
+

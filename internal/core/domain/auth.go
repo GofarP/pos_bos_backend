@@ -38,8 +38,9 @@ type AuthRepository interface {
 	RevokeRefreshToken(ctx context.Context, token string) error
 }
 
-type AuthService interface{
-	Login(ctx context.Context, request LoginRequest)(LoginResponse, error)
+type AuthService interface {
+	Login(ctx context.Context, request LoginRequest) (LoginResponse, error)
 	Logout(ctx context.Context, request LogoutRequest) error
 	Refresh(ctx context.Context, request RefreshRequest) (LoginResponse, error)
+	GetMe(ctx context.Context, userID int) (*User, error)
 }

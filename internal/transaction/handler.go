@@ -22,11 +22,12 @@ func NewTransactionHandler(service domain.TransactionService) *TransactionHandle
 	return &TransactionHandler{service: service}
 }
 
-func (h *TransactionHandler) RegisterRoutes(router chi.Router) {
-	router.Post("/transactions", h.Checkout)
-	router.Get("/transactions", h.GetAllTransactions)
-	router.Get("/transactions/{id}", h.GetTransactionByID)
-	router.Post("/transactions/{id}/cancel", h.CancelTransaction)
+func (h *TransactionHandler) RegisterRoutes(router chi.Router, rbacRepo domain.RBACRepository) {
+	router.With(middleware.RequirePermission("create.transaction", rbacRepo)).Post("/transactions", h.Checkout)
+	router.With(middleware.RequirePermission("view.transaction", rbacRepo)).Get("/transactions", h.GetAllTransactions)
+	router.With(middleware.RequirePermission("view.transaction", rbacRepo)).Get("/transactions/summary", h.GetDashboardSummary)
+	router.With(middleware.RequirePermission("view.transaction", rbacRepo)).Get("/transactions/{id}", h.GetTransactionByID)
+	router.With(middleware.RequirePermission("edit.transaction", rbacRepo)).Post("/transactions/{id}/cancel", h.CancelTransaction)
 }
 
 func (h *TransactionHandler) Checkout(w http.ResponseWriter, r *http.Request) {
@@ -158,4 +159,14 @@ func (h *TransactionHandler) CancelTransaction(w http.ResponseWriter, r *http.Re
 	response.JSON(w, http.StatusOK, map[string]string{
 		"message": "Transaction cancelled successfully and stock refunded",
 	})
+}
+
+func (h *TransactionHandler) GetDashboardSummary(w http.ResponseWriter, r *http.Request) {
+	res, err := h.service.GetDashboardSummary(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "Failed to get dashboard summary")
+		return
+	}
+
+	response.JSON(w, http.StatusOK, res)
 }
