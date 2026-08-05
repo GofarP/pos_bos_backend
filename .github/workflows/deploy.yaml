@@ -24,6 +24,8 @@ jobs:
       - name: Build Go Binary for Linux
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app_go ./cmd/api
+          mkdir deploy_folder
+          mv app_go deploy_folder/
 
       # 4. Unggah file binary hasil build ke cPanel via FTP
       - name: Upload Binary to cPanel via FTP
@@ -34,8 +36,6 @@ jobs:
           password: ${{ secrets.CPANEL_PASSWORD }}
           port: ${{ secrets.CPANEL_PORT }}
           server-dir: ${{ secrets.REMOTE_DIR }}
+          local-dir: ./deploy_folder/
           dangerous-clean-slate: false
-          exclude: |
-            **/*
-            !app_go
 
