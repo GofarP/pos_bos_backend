@@ -1,0 +1,41 @@
+name: Deploy Go App to cPanel
+
+on:
+  push:
+    branches:
+      - main  # Berjalan otomatis setiap ada push ke branch 'main'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Ambil kode terbaru dari repository Git
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Siapkan Go Environment di server GitHub
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      # 3. Kompilasi kode Go menjadi binary Linux
+      - name: Build Go Binary for Linux
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app_go ./cmd/api
+
+      # 4. Unggah file binary hasil build ke cPanel via FTP
+      - name: Upload Binary to cPanel via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.CPANEL_HOST }}
+          username: ${{ secrets.CPANEL_USERNAME }}
+          password: ${{ secrets.CPANEL_PASSWORD }}
+          port: ${{ secrets.CPANEL_PORT }}
+          server-dir: ${{ secrets.REMOTE_DIR }}
+          dangerous-clean-slate: false
+          exclude: |
+            **/*
+            !app_go
+
