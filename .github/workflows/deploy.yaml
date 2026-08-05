@@ -26,6 +26,8 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o app_go ./cmd/api
           mkdir deploy_folder
           mv app_go deploy_folder/
+          cp -r database deploy_folder/
+          cp migrate.sh deploy_folder/
 
       # 4. Unggah file binary hasil build ke cPanel via FTP
       - name: Upload Binary to cPanel via FTP
