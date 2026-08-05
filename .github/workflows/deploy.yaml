@@ -23,7 +23,7 @@ jobs:
       # 3. Kompilasi kode Go menjadi binary Linux
       - name: Build Go Binary for Linux
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app_go ./cmd/api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o app_go ./cmd/api
           mkdir deploy_folder
           mv app_go deploy_folder/
 
