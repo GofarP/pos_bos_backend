@@ -23,3 +23,5 @@ uploads/
 # Build artifacts
 app_go
 deploy_folder/
+run_seeder
+goose
