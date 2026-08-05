@@ -19,3 +19,7 @@
 
 # Uploads directory
 uploads/
+
+# Build artifacts
+app_go
+deploy_folder/
