@@ -146,7 +146,7 @@ func main() {
 	})
 
 	// 5. Start Server
-	port := ":8080"
+	port := "127.0.0.1:8080"
 	log.Printf("Server starting on port %s", port)
 	if err := http.ListenAndServe(port, router); err != nil {
 		log.Fatalf("failed to start server: %v", err)
