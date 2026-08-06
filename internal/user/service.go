@@ -164,6 +164,8 @@ func (service *userService) UpdateUser(ctx context.Context, id int, request doma
 			return nil, err
 		}
 		user.Password = string(hashedPassword)
+	} else {
+		user.Password = existingUser.Password
 	}
 
 	err = service.repository.Update(ctx, id, user)

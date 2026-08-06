@@ -153,14 +153,14 @@ func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domai
 }
 
 func (repository *mysqlUserRepository) Update(ctx context.Context, id int, user *domain.User) error {
-	query := `UPDATE users SET name=?, email=?, photo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+	query := `UPDATE users SET name=?, email=?, password=?, photo=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`
 	stmt, err := repository.db.PrepareContext(ctx, query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, user.Name, user.Email, user.Photo, id)
+	_, err = stmt.ExecContext(ctx, user.Name, user.Email, user.Password, user.Photo, id)
 	return err
 }
 
