@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
 	"pos_bos/internal/core/domain"
 	"pos_bos/pkg/middleware"
 	"pos_bos/pkg/response"
@@ -90,7 +91,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 		Value:    res.Token,
 		Expires:  time.Now().Add(15 * time.Minute),
 		HttpOnly: true,
-		Secure:   false, // Set true in production (HTTPS)
+		Secure:   os.Getenv("APP_ENV") == "production", // Set true in production (HTTPS)
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -100,7 +101,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 		Value:    res.RefreshToken,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: true,
-		Secure:   false, 
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -110,7 +111,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 		Value:    "1",
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: false,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -153,7 +154,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -163,7 +164,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -173,7 +174,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
 		HttpOnly: false,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -214,7 +215,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 		Value:    res.Token,
 		Expires:  time.Now().Add(15 * time.Minute),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -224,7 +225,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 		Value:    res.RefreshToken,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
@@ -234,7 +235,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 		Value:    "1",
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: false,
-		Secure:   false,
+		Secure:   os.Getenv("APP_ENV") == "production",
 		Path:     "/",
 		SameSite: http.SameSiteLaxMode,
 	})
