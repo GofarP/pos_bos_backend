@@ -20,14 +20,18 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 }
 
 func (repository *mysqlUserRepository) Create(ctx context.Context, user *domain.User) error {
-	query := `INSERT INTO users (name, email, password, photo) VALUES (?, ?, ?, ?)`
+	query := `INSERT INTO users (name, email, password, photo, auth_provider, provider_id) VALUES (?, ?, ?, ?, ?, ?)`
 	stmt, err := repository.db.PrepareContext(ctx, query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	result, err := stmt.ExecContext(ctx, user.Name, user.Email, user.Password, user.Photo)
+	if user.AuthProvider == "" {
+		user.AuthProvider = "local"
+	}
+
+	result, err := stmt.ExecContext(ctx, user.Name, user.Email, user.Password, user.Photo, user.AuthProvider, user.ProviderID)
 	if err != nil {
 		return err
 	}
@@ -42,7 +46,7 @@ func (repository *mysqlUserRepository) Create(ctx context.Context, user *domain.
 }
 
 func (repository *mysqlUserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	query := `SELECT id, name, email, password, photo, created_at, updated_at FROM users WHERE email = ?`
+	query := `SELECT id, name, email, password, photo, auth_provider, provider_id, created_at, updated_at FROM users WHERE email = ?`
 	stmt, err := repository.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -56,6 +60,8 @@ func (repository *mysqlUserRepository) GetByEmail(ctx context.Context, email str
 		&user.Email,
 		&user.Password,
 		&user.Photo,
+		&user.AuthProvider,
+		&user.ProviderID,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -71,7 +77,7 @@ func (repository *mysqlUserRepository) GetByEmail(ctx context.Context, email str
 }
 
 func (r *mysqlUserRepository) GetByID(ctx context.Context, id int) (*domain.User, error) {
-	query := `SELECT id, name, email, password, photo, created_at, updated_at FROM users WHERE id = ?`
+	query := `SELECT id, name, email, password, photo, auth_provider, provider_id, created_at, updated_at FROM users WHERE id = ?`
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -81,7 +87,7 @@ func (r *mysqlUserRepository) GetByID(ctx context.Context, id int) (*domain.User
 	row := stmt.QueryRowContext(ctx, id)
 
 	var user domain.User
-	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.CreatedAt, &user.UpdatedAt)
+	err = row.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.AuthProvider, &user.ProviderID, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Return nil if user not found
@@ -94,7 +100,7 @@ func (r *mysqlUserRepository) GetByID(ctx context.Context, id int) (*domain.User
 
 func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domain.PaginationRequest) ([]*domain.User, int, error) {
 	countQuery := "SELECT COUNT(id) FROM users WHERE 1=1"
-	selectQuery := "SELECT id, name, email, password, photo, created_at, updated_at FROM users WHERE 1=1"
+	selectQuery := "SELECT id, name, email, password, photo, auth_provider, provider_id, created_at, updated_at FROM users WHERE 1=1"
 	var args []interface{}
 
 	if request.Search != "" {
@@ -139,7 +145,7 @@ func (repository *mysqlUserRepository) GetAll(ctx context.Context, request domai
 	users := make([]*domain.User, 0)
 	for rows.Next() {
 		var user domain.User
-		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.Name, &user.Email, &user.Password, &user.Photo, &user.AuthProvider, &user.ProviderID, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		users = append(users, &user)

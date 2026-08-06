@@ -40,6 +40,7 @@ type AuthRepository interface {
 
 type AuthService interface {
 	Login(ctx context.Context, request LoginRequest) (LoginResponse, error)
+	OAuthLogin(ctx context.Context, request OAuthLoginRequest) (LoginResponse, error)
 	Logout(ctx context.Context, request LogoutRequest) error
 	Refresh(ctx context.Context, request RefreshRequest) (LoginResponse, error)
 	GetMe(ctx context.Context, userID int) (*User, error)

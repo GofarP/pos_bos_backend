@@ -1,0 +1,4 @@
+ALTER TABLE users 
+ADD COLUMN auth_provider VARCHAR(50) DEFAULT 'local',
+ADD COLUMN provider_id VARCHAR(255) NULL,
+MODIFY COLUMN password VARCHAR(255) NULL;

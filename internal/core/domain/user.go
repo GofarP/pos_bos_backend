@@ -8,15 +8,17 @@ import (
 
 // User represents the users table in the database
 type User struct {
-	ID          int       `json:"id"`
-	Name        string    `json:"name"`
-	Email       string    `json:"email"`
-	Password    string    `json:"-"` // Never send password in JSON response
-	Photo       *string   `json:"photo,omitempty"`
-	Roles       []Role    `json:"roles,omitempty"`
-	Permissions []string  `json:"permissions,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           int       `json:"id"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	Password     string    `json:"-"` // Never send password in JSON response
+	Photo        *string   `json:"photo,omitempty"`
+	AuthProvider string    `json:"auth_provider,omitempty"`
+	ProviderID   *string   `json:"provider_id,omitempty"`
+	Roles        []Role    `json:"roles,omitempty"`
+	Permissions  []string  `json:"permissions,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // AddUserRequest represents the incoming request
@@ -55,4 +57,12 @@ type UserService interface {
 	GetAllUsers(ctx context.Context, request PaginationRequest) (PaginationResponse, error)
 	UpdateUser(ctx context.Context, id int, request UpdateUserRequest)(*User, error)
 	DeleteUser(ctx context.Context, id int) error
+}
+
+type OAuthLoginRequest struct {
+	Email      string
+	Name       string
+	Photo      string
+	Provider   string
+	ProviderID string
 }

@@ -130,6 +130,7 @@ func main() {
 	// 4. Register Routes
 	// Public routes
 	authHandler.RegisterRoutes(router)
+	authHandler.RegisterOAuthRoutes(router)
 
 	// Protected routes
 	router.Group(func(r chi.Router) {

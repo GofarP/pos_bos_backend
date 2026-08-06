@@ -93,6 +93,76 @@ func (service *authService) Login(ctx context.Context, request domain.LoginReque
 	}, nil
 }
 
+func (service *authService) OAuthLogin(ctx context.Context, request domain.OAuthLoginRequest) (domain.LoginResponse, error) {
+	user, err := service.userRepo.GetByEmail(ctx, request.Email)
+	if err != nil {
+		return domain.LoginResponse{}, err
+	}
+
+	if user == nil {
+		// Create new user
+		newUser := &domain.User{
+			Name:         request.Name,
+			Email:        request.Email,
+			Photo:        &request.Photo,
+			AuthProvider: request.Provider,
+			ProviderID:   &request.ProviderID,
+		}
+		if err := service.userRepo.Create(ctx, newUser); err != nil {
+			return domain.LoginResponse{}, err
+		}
+		user = newUser
+		// Optionally assign a default role here, e.g., Cashier or User
+	} else if user.AuthProvider == "local" || user.ProviderID == nil {
+		// Update existing user with OAuth info if needed
+		user.AuthProvider = request.Provider
+		user.ProviderID = &request.ProviderID
+		if err := service.userRepo.Update(ctx, user.ID, user); err != nil {
+			return domain.LoginResponse{}, err
+		}
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID,
+		"exp":     time.Now().Add(time.Minute * 15).Unix(), // Berlaku 15 Menit
+	})
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "rahasia_default"
+	}
+
+	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return domain.LoginResponse{}, err
+	}
+
+	// Generate Refresh Token
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return domain.LoginResponse{}, err
+	}
+	refreshToken := base64.URLEncoding.EncodeToString(b)
+
+	// Hash token before storing in DB for security
+	hash := sha256.Sum256([]byte(refreshToken))
+	hashedToken := hex.EncodeToString(hash[:])
+
+	// Store hashed token in DB
+	expiresAt := time.Now().Add(time.Hour * 24 * 7) // Berlaku 7 hari
+	if err := service.authRepo.StoreRefreshToken(ctx, user.ID, hashedToken, expiresAt); err != nil {
+		return domain.LoginResponse{}, err
+	}
+
+	service.populateUser(ctx, user)
+
+	return domain.LoginResponse{
+		Token:        tokenString,
+		RefreshToken: refreshToken,
+		User:         *user,
+	}, nil
+}
+
 func (service *authService) Logout(ctx context.Context, request domain.LogoutRequest) error {
 	if err := service.validate.Struct(request); err != nil {
 		return validation.FormatValidationError(err)
