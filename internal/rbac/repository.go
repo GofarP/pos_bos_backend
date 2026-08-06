@@ -16,12 +16,18 @@ func NewRBACRepository(db *sql.DB) domain.RBACRepository {
 
 func (r *rbacRepository) HasPermission(ctx context.Context, userID int, permissionName string) (bool, error) {
 	query := `
-		SELECT 1 FROM permissions p
-		LEFT JOIN user_permissions up ON p.id = up.permission_id AND up.user_id = ?
-		LEFT JOIN role_permissions rp ON p.id = rp.permission_id
-		LEFT JOIN user_roles ur ON rp.role_id = ur.role_id AND ur.user_id = ?
-		WHERE p.name = ? AND (up.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
-		LIMIT 1
+		SELECT 1
+		FROM (
+			SELECT 1 as has_perm FROM permissions p
+			LEFT JOIN user_permissions up ON p.id = up.permission_id AND up.user_id = ?
+			LEFT JOIN role_permissions rp ON p.id = rp.permission_id
+			LEFT JOIN user_roles ur ON rp.role_id = ur.role_id AND ur.user_id = ?
+			WHERE p.name = ? AND (up.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
+			UNION
+			SELECT 1 as has_perm FROM roles r
+			JOIN user_roles ur ON r.id = ur.role_id
+			WHERE ur.user_id = ? AND r.name = 'Superadmin'
+		) AS temp LIMIT 1
 	`
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
@@ -30,7 +36,7 @@ func (r *rbacRepository) HasPermission(ctx context.Context, userID int, permissi
 	defer stmt.Close()
 
 	var exists int
-	err = stmt.QueryRowContext(ctx, userID, userID, permissionName).Scan(&exists)
+	err = stmt.QueryRowContext(ctx, userID, userID, permissionName, userID).Scan(&exists)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
