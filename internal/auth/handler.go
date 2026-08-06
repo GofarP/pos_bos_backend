@@ -24,6 +24,13 @@ func NewAuthHandler(service domain.AuthService) *AuthHandler {
 	}
 }
 
+func getCookieDomain() string {
+	if os.Getenv("APP_ENV") == "production" {
+		return ".gofarputraperdana.my.id"
+	}
+	return ""
+}
+
 func (handler *AuthHandler) RegisterRoutes(router chi.Router) {
 	router.Post("/login", handler.Login)
 	router.Post("/logout", handler.Logout)
@@ -87,6 +94,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 
 	// Set HttpOnly Cookies
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "access_token",
 		Value:    res.Token,
 		Expires:  time.Now().Add(15 * time.Minute),
@@ -97,6 +105,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "refresh_token",
 		Value:    res.RefreshToken,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
@@ -107,6 +116,7 @@ func (handler *AuthHandler) Login(responseWriter http.ResponseWriter, request *h
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "is_logged_in",
 		Value:    "1",
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
@@ -150,6 +160,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 
 	// Clear Cookies
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "access_token",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
@@ -160,6 +171,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "refresh_token",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
@@ -170,6 +182,7 @@ func (handler *AuthHandler) Logout(responseWriter http.ResponseWriter, request *
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "is_logged_in",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
@@ -211,6 +224,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 
 	// Set New Cookies
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "access_token",
 		Value:    res.Token,
 		Expires:  time.Now().Add(15 * time.Minute),
@@ -221,6 +235,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "refresh_token",
 		Value:    res.RefreshToken,
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
@@ -231,6 +246,7 @@ func (handler *AuthHandler) Refresh(responseWriter http.ResponseWriter, request 
 	})
 
 	http.SetCookie(responseWriter, &http.Cookie{
+		Domain:   getCookieDomain(),
 		Name:     "is_logged_in",
 		Value:    "1",
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
