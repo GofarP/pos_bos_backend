@@ -210,15 +210,15 @@ func (r *rbacRepository) CheckRoleNameExists(ctx context.Context, name string) (
 	return exists, err
 }
 
-func (r *rbacRepository) CreateRole(ctx context.Context, name string) (*domain.Role, error) {
-	query := `INSERT INTO roles (name) VALUES (?)`
+func (r *rbacRepository) CreateRole(ctx context.Context, name, description string) (*domain.Role, error) {
+	query := `INSERT INTO roles (name, description) VALUES (?, ?)`
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	res, err := stmt.ExecContext(ctx, name)
+	res, err := stmt.ExecContext(ctx, name, description)
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +229,9 @@ func (r *rbacRepository) CreateRole(ctx context.Context, name string) (*domain.R
 	}
 
 	return &domain.Role{
-		ID:   int(id),
-		Name: name,
+		ID:          int(id),
+		Name:        name,
+		Description: description,
 	}, nil
 }
 
@@ -251,7 +252,7 @@ func (r *rbacRepository) GetAllRoles(ctx context.Context, req domain.PaginationR
 	if offset < 0 {
 		offset = 0
 	}
-	query := `SELECT id, name, created_at, updated_at FROM roles ORDER BY id DESC LIMIT ? OFFSET ?`
+	query := `SELECT id, name, COALESCE(description, '') as description, created_at, updated_at FROM roles ORDER BY id DESC LIMIT ? OFFSET ?`
 	stmtSelect, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, 0, err
@@ -267,7 +268,7 @@ func (r *rbacRepository) GetAllRoles(ctx context.Context, req domain.PaginationR
 	var roles []domain.Role
 	for rows.Next() {
 		var role domain.Role
-		if err := rows.Scan(&role.ID, &role.Name, &role.CreatedAt, &role.UpdatedAt); err != nil {
+		if err := rows.Scan(&role.ID, &role.Name, &role.Description, &role.CreatedAt, &role.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		roles = append(roles, role)
@@ -276,22 +277,23 @@ func (r *rbacRepository) GetAllRoles(ctx context.Context, req domain.PaginationR
 	return roles, total, nil
 }
 
-func (r *rbacRepository) UpdateRole(ctx context.Context, id int, name string) (*domain.Role, error) {
-	query := `UPDATE roles SET name = ? WHERE id = ?`
+func (r *rbacRepository) UpdateRole(ctx context.Context, id int, name, description string) (*domain.Role, error) {
+	query := `UPDATE roles SET name = ?, description = ? WHERE id = ?`
 	stmt, err := r.db.PrepareContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, name, id)
+	_, err = stmt.ExecContext(ctx, name, description, id)
 	if err != nil {
 		return nil, err
 	}
 
 	return &domain.Role{
-		ID:   id,
-		Name: name,
+		ID:          id,
+		Name:        name,
+		Description: description,
 	}, nil
 }
 

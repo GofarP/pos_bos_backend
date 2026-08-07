@@ -103,7 +103,7 @@ func (s *rbacService) CreateRole(ctx context.Context, req domain.RoleRequest) (*
 		return nil, errors.New("role name already exists")
 	}
 
-	role, err := s.rbacRepo.CreateRole(ctx, req.Name)
+	role, err := s.rbacRepo.CreateRole(ctx, req.Name, req.Description)
 	if err != nil {
 		return nil, err
 	}
@@ -117,6 +117,7 @@ func (s *rbacService) CreateRole(ctx context.Context, req domain.RoleRequest) (*
 	return &domain.RoleResponse{
 		ID:          role.ID,
 		Name:        role.Name,
+		Description: role.Description,
 		Permissions: perms,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
@@ -142,6 +143,7 @@ func (s *rbacService) GetAllRoles(ctx context.Context, req domain.PaginationRequ
 		roleResponses = append(roleResponses, domain.RoleResponse{
 			ID:          role.ID,
 			Name:        role.Name,
+			Description: role.Description,
 			Permissions: perms,
 			CreatedAt:   role.CreatedAt,
 			UpdatedAt:   role.UpdatedAt,
@@ -169,7 +171,7 @@ func (s *rbacService) UpdateRole(ctx context.Context, id int, req domain.RoleReq
 		return nil, validation.FormatValidationError(err)
 	}
 
-	role, err := s.rbacRepo.UpdateRole(ctx, id, req.Name)
+	role, err := s.rbacRepo.UpdateRole(ctx, id, req.Name, req.Description)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +185,7 @@ func (s *rbacService) UpdateRole(ctx context.Context, id int, req domain.RoleReq
 	return &domain.RoleResponse{
 		ID:          role.ID,
 		Name:        role.Name,
+		Description: role.Description,
 		Permissions: perms,
 	}, nil
 }
